@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(kubectl get:*)",
+      "Bash(ssh node2 free:*)",
+      "Bash(helm list:*)",
+      "Bash(kubectl config view:*)",
+      "Bash(kubectl cluster-info:*)",
+      "Bash(ssh:*)",
+      "Bash(ping:*)",
+      "Bash(kubectl apply:*)",
+      "Bash(curl:*)",
+      "WebSearch",
+      "WebFetch(domain:www.anthropic.com)",
+      "Bash(uv run python:*)",
+      "WebFetch(domain:gateway.envoyproxy.io)",
+      "Bash(mkdir:*)",
+      "Bash(kubectl describe:*)",
+      "Bash(kubectl logs:*)",
+      "Bash(kubectl exec:*)",
+      "Bash(kubectl rollout status:*)",
+      "Bash(helm get values:*)",
+      "Bash(helm history:*)",
+      "Bash(helm show values:*)",
+      "Bash(helm get manifest:*)",
+      "Bash(helm template:*)",
+      "Bash(helm show chart:*)",
+      "WebFetch(domain:grafana.com)",
+      "Bash(kubectl run:*)",
+      "Bash(chmod:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

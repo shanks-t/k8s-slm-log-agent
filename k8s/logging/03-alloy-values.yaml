@@ -1,0 +1,145 @@
+# Grafana Alloy Helm Chart Values
+# Chart: grafana/alloy
+# Purpose: Collect container logs from Kubernetes pods and send to Loki
+# Deployment: DaemonSet (one pod per node)
+
+# Alloy configuration in River language
+# River is Alloy's configuration language (similar to HCL)
+alloy:
+  configMap:
+    # Embedded configuration - Alloy will use this config
+    content: |-
+      // Logging configuration for Alloy itself
+      logging {
+        level  = "info"
+        format = "logfmt"
+      }
+
+      // Discover Kubernetes pods on THIS node only
+      // This is critical for DaemonSet deployment to avoid duplicate log collection
+      discovery.kubernetes "pods" {
+        role = "pod"
+
+        // Only discover pods running on the same node as this Alloy instance
+        // Uses the HOSTNAME environment variable to filter by node
+        selectors {
+          role  = "pod"
+          field = "spec.nodeName=" + coalesce(env("HOSTNAME"), constants.hostname)
+        }
+      }
+
+      // Relabel discovered pods to extract useful metadata
+      // This transforms Kubernetes metadata into Loki labels
+      discovery.relabel "pod_logs" {
+        targets = discovery.kubernetes.pods.targets
+
+        // Extract namespace and use as label
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          action        = "replace"
+          target_label  = "namespace"
+        }
+
+        // Extract pod name and use as label
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          action        = "replace"
+          target_label  = "pod"
+        }
+
+        // Extract container name and use as label
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          action        = "replace"
+          target_label  = "container"
+        }
+
+        // Extract node name and use as label
+        rule {
+          source_labels = ["__meta_kubernetes_pod_node_name"]
+          action        = "replace"
+          target_label  = "node"
+        }
+
+        // Add job label based on namespace/pod
+        rule {
+          source_labels = ["__meta_kubernetes_namespace", "__meta_kubernetes_pod_name"]
+          separator     = "/"
+          action        = "replace"
+          target_label  = "job"
+        }
+      }
+
+      // Scrape logs from discovered pods
+      // This component tails container logs
+      loki.source.kubernetes "pod_logs" {
+        targets    = discovery.relabel.pod_logs.output
+        forward_to = [loki.process.pod_logs.receiver]
+      }
+
+      // Process and enrich logs before sending to Loki
+      loki.process "pod_logs" {
+        // Add static labels to all log lines
+        stage.static_labels {
+          values = {
+            cluster = "homelab",  // Identify your cluster
+          }
+        }
+
+        // Forward processed logs to Loki
+        forward_to = [loki.write.loki_endpoint.receiver]
+      }
+
+      // Write logs to Loki
+      // This defines the Loki endpoint and authentication
+      loki.write "loki_endpoint" {
+        endpoint {
+          // Loki service address in Kubernetes DNS format
+          // This connects to the Loki service we deployed earlier
+          url = "http://loki.logging.svc.cluster.local:3100/loki/api/v1/push"
+
+          // No authentication needed for internal cluster communication
+          // In production, you might add basic_auth here
+        }
+      }
+
+# Controller configuration
+controller:
+  # Deploy as DaemonSet (one pod per node)
+  type: "daemonset"
+
+  # Tolerations to allow Alloy to run on node-2 despite the taint
+  tolerations:
+    - key: heavy
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
+
+# Resources for Alloy pods
+# Start conservative, can increase based on actual usage
+resources:
+  requests:
+    cpu: 100m      # 0.1 CPU cores
+    memory: 128Mi  # 128MB RAM
+  limits:
+    cpu: 500m      # Max 0.5 CPU cores
+    memory: 512Mi  # Max 512MB RAM
+
+# Service account configuration
+serviceAccount:
+  create: true
+
+# RBAC permissions
+# Alloy needs to list/watch pods and namespaces for discovery
+rbac:
+  create: true
+
+# No specific node selector - Alloy should run on ALL nodes
+# This ensures we collect logs from both node-1 and node-2
+# nodeSelector: {}  # Empty = no restrictions
+
+# Security context - run as non-root
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 473  # Alloy default user
+  fsGroup: 473

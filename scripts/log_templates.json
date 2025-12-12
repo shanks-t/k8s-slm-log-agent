@@ -1,0 +1,343 @@
+{
+  "templates": [
+    {
+      "id": "pod_crashloop",
+      "template": "Back-off restarting failed container {container} in pod {pod_name}_{namespace}_{pod_uid}",
+      "severity": "ERROR",
+      "category": "pod_lifecycle",
+      "root_cause": "container_crash",
+      "component": "kubelet",
+      "summary": "Container is crash looping and unable to start successfully",
+      "action_needed": "investigate"
+    },
+    {
+      "id": "imagepull_notfound",
+      "template": "Failed to pull image \"{image}\": rpc error: code = NotFound desc = failed to pull and unpack image \"{registry}/{image}:{tag}\": not found",
+      "severity": "ERROR",
+      "category": "image_pull",
+      "root_cause": "image_not_found",
+      "component": "kubelet",
+      "summary": "Unable to pull container image from registry",
+      "action_needed": "fix_config"
+    },
+    {
+      "id": "imagepull_backoff",
+      "template": "Back-off pulling image \"{registry}/{image}:{tag}\"",
+      "severity": "WARN",
+      "category": "image_pull",
+      "root_cause": "image_pull_retry",
+      "component": "kubelet",
+      "summary": "Repeated failures pulling container image",
+      "action_needed": "investigate"
+    },
+    {
+      "id": "oomkilled",
+      "template": "OOMKilled: Container {container} in pod {namespace}/{pod_name} exceeded memory limit ({memory_limit})",
+      "severity": "CRITICAL",
+      "category": "resource_exhaustion",
+      "root_cause": "out_of_memory",
+      "component": "kubelet",
+      "summary": "Container killed due to out-of-memory condition",
+      "action_needed": "scale"
+    },
+    {
+      "id": "readiness_failed",
+      "template": "Readiness probe failed: HTTP probe failed with statuscode: {status_code}",
+      "severity": "WARN",
+      "category": "probe_failure",
+      "root_cause": "health_check_failed",
+      "component": "kubelet",
+      "summary": "Readiness probe is failing",
+      "action_needed": "investigate"
+    },
+    {
+      "id": "liveness_failed",
+      "template": "Liveness probe failed: Get \"http://{ip}:{port}{path}\": dial tcp {ip}:{port}: connect: connection refused",
+      "severity": "ERROR",
+      "category": "probe_failure",
+      "root_cause": "health_check_failed",
+      "component": "kubelet",
+      "summary": "Liveness probe failed, container will be restarted",
+      "action_needed": "investigate"
+    },
+    {
+      "id": "dns_lookup_failed",
+      "template": "lookup {hostname} on {dns_server}: no such host",
+      "severity": "ERROR",
+      "category": "network_error",
+      "root_cause": "dns_resolution_failed",
+      "component": "coredns",
+      "summary": "DNS lookup failed for hostname",
+      "action_needed": "investigate"
+    },
+    {
+      "id": "dns_timeout",
+      "template": "lookup {hostname}: i/o timeout",
+      "severity": "ERROR",
+      "category": "network_error",
+      "root_cause": "dns_timeout",
+      "component": "coredns",
+      "summary": "DNS query timed out",
+      "action_needed": "investigate"
+    },
+    {
+      "id": "connection_refused",
+      "template": "dial tcp {ip}:{port}: connect: connection refused",
+      "severity": "ERROR",
+      "category": "network_error",
+      "root_cause": "connection_refused",
+      "component": "application",
+      "summary": "Unable to establish TCP connection",
+      "action_needed": "investigate"
+    },
+    {
+      "id": "connection_timeout",
+      "template": "dial tcp {ip}:{port}: i/o timeout",
+      "severity": "ERROR",
+      "category": "network_error",
+      "root_cause": "connection_timeout",
+      "component": "application",
+      "summary": "TCP connection timed out",
+      "action_needed": "investigate"
+    },
+    {
+      "id": "pvc_mount_failed",
+      "template": "MountVolume.SetUp failed for volume \"{volume_name}\": PersistentVolumeClaim \"{pvc_name}\" not found",
+      "severity": "ERROR",
+      "category": "storage_error",
+      "root_cause": "pvc_not_found",
+      "component": "kubelet",
+      "summary": "Failed to mount persistent volume",
+      "action_needed": "fix_config"
+    },
+    {
+      "id": "pvc_pending",
+      "template": "PersistentVolumeClaim \"{pvc_name}\" in namespace \"{namespace}\" is pending",
+      "severity": "WARN",
+      "category": "storage_error",
+      "root_cause": "pvc_pending",
+      "component": "kubelet",
+      "summary": "PVC is waiting for volume provisioning",
+      "action_needed": "monitor"
+    },
+    {
+      "id": "configmap_not_found",
+      "template": "ConfigMap \"{configmap_name}\" not found in namespace \"{namespace}\"",
+      "severity": "ERROR",
+      "category": "config_error",
+      "root_cause": "configmap_missing",
+      "component": "kubelet",
+      "summary": "Referenced ConfigMap does not exist",
+      "action_needed": "fix_config"
+    },
+    {
+      "id": "secret_not_found",
+      "template": "Secret \"{secret_name}\" not found in namespace \"{namespace}\"",
+      "severity": "ERROR",
+      "category": "config_error",
+      "root_cause": "secret_missing",
+      "component": "kubelet",
+      "summary": "Referenced Secret does not exist",
+      "action_needed": "fix_config"
+    },
+    {
+      "id": "rbac_forbidden",
+      "template": "pods is forbidden: User \"system:serviceaccount:{namespace}:{serviceaccount}\" cannot {verb} resource \"{resource}\" in API group \"\" in namespace \"{target_namespace}\"",
+      "severity": "ERROR",
+      "category": "permission_error",
+      "root_cause": "rbac_denied",
+      "component": "apiserver",
+      "summary": "ServiceAccount lacks required RBAC permissions",
+      "action_needed": "fix_config"
+    },
+    {
+      "id": "pod_evicted",
+      "template": "Pod {namespace}/{pod_name} evicted: The node was low on resource: {resource}",
+      "severity": "WARN",
+      "category": "resource_exhaustion",
+      "root_cause": "node_pressure",
+      "component": "kubelet",
+      "summary": "Pod evicted due to node resource pressure",
+      "action_needed": "scale"
+    },
+    {
+      "id": "service_no_endpoints",
+      "template": "Service \"{service_name}\" in namespace \"{namespace}\" has no endpoints",
+      "severity": "WARN",
+      "category": "network_error",
+      "root_cause": "no_endpoints",
+      "component": "endpoint_controller",
+      "summary": "Service has no ready backend pods",
+      "action_needed": "investigate"
+    },
+    {
+      "id": "tls_cert_error",
+      "template": "x509: certificate has expired or is not yet valid",
+      "severity": "ERROR",
+      "category": "certificate_error",
+      "root_cause": "cert_expired",
+      "component": "application",
+      "summary": "TLS certificate is invalid or expired",
+      "action_needed": "fix_config"
+    },
+    {
+      "id": "tls_handshake_failed",
+      "template": "http: TLS handshake error from {ip}:{port}: remote error: tls: bad certificate",
+      "severity": "ERROR",
+      "category": "certificate_error",
+      "root_cause": "tls_handshake_failed",
+      "component": "application",
+      "summary": "TLS handshake failed with bad certificate",
+      "action_needed": "fix_config"
+    },
+    {
+      "id": "containerd_runtime_error",
+      "template": "containerd: failed to create shim task: context deadline exceeded",
+      "severity": "ERROR",
+      "category": "runtime_error",
+      "root_cause": "container_runtime_timeout",
+      "component": "containerd",
+      "summary": "Container runtime failed to start container",
+      "action_needed": "investigate"
+    },
+    {
+      "id": "disk_pressure",
+      "template": "eviction manager: pod {namespace}/{pod_name} exceeds ephemeral storage limit",
+      "severity": "WARN",
+      "category": "resource_exhaustion",
+      "root_cause": "disk_pressure",
+      "component": "kubelet",
+      "summary": "Pod exceeding ephemeral storage limits",
+      "action_needed": "investigate"
+    },
+    {
+      "id": "node_not_ready",
+      "template": "Node {node_name} status is now: NotReady",
+      "severity": "CRITICAL",
+      "category": "node_failure",
+      "root_cause": "node_not_ready",
+      "component": "node_controller",
+      "summary": "Node has become unavailable",
+      "action_needed": "investigate"
+    },
+    {
+      "id": "loki_ingester_error",
+      "template": "level=error ts={timestamp} caller=ingester.go:{line_num} msg=\"failed to flush chunks\" err=\"context deadline exceeded\"",
+      "severity": "ERROR",
+      "category": "infrastructure_error",
+      "root_cause": "ingester_timeout",
+      "component": "loki_ingester",
+      "summary": "Loki ingester failed to flush log chunks",
+      "action_needed": "investigate"
+    },
+    {
+      "id": "loki_memberlist_error",
+      "template": "level=error ts={timestamp} caller=memberlist.go:{line_num} msg=\"Failed to join memberlist\" err=\"no such host\"",
+      "severity": "ERROR",
+      "category": "infrastructure_error",
+      "root_cause": "memberlist_join_failed",
+      "component": "loki_memberlist",
+      "summary": "Loki unable to join memberlist cluster",
+      "action_needed": "investigate"
+    },
+    {
+      "id": "prometheus_scrape_failed",
+      "template": "Get \"http://{pod_ip}:{port}/metrics\": dial tcp {pod_ip}:{port}: connect: connection refused",
+      "severity": "WARN",
+      "category": "monitoring_error",
+      "root_cause": "scrape_failed",
+      "component": "prometheus",
+      "summary": "Prometheus unable to scrape metrics from target",
+      "action_needed": "investigate"
+    },
+    {
+      "id": "envoy_upstream_error",
+      "template": "[{timestamp}] \"GET {path} HTTP/1.1\" {status_code} - via_upstream - \"-\" {bytes} {duration} \"-\" \"{user_agent}\" upstream_reset_before_response_started{connect_failure}",
+      "severity": "ERROR",
+      "category": "gateway_error",
+      "root_cause": "upstream_connection_failed",
+      "component": "envoy",
+      "summary": "Envoy unable to connect to upstream service",
+      "action_needed": "investigate"
+    },
+    {
+      "id": "quota_exceeded",
+      "template": "Error creating: pods \"{pod_name}\" is forbidden: exceeded quota: {quota_name}, requested: {requested}, used: {used}, limited: {limit}",
+      "severity": "ERROR",
+      "category": "resource_exhaustion",
+      "root_cause": "resource_quota_exceeded",
+      "component": "apiserver",
+      "summary": "Resource quota exceeded for namespace",
+      "action_needed": "scale"
+    },
+    {
+      "id": "invalid_yaml",
+      "template": "error parsing {filename}: error converting YAML to JSON: yaml: line {line_num}: {error_msg}",
+      "severity": "ERROR",
+      "category": "config_error",
+      "root_cause": "invalid_manifest",
+      "component": "kubectl",
+      "summary": "Invalid YAML syntax in manifest",
+      "action_needed": "fix_config"
+    },
+    {
+      "id": "startup_probe_failed",
+      "template": "Startup probe failed: Get \"http://{ip}:{port}{path}\": context deadline exceeded",
+      "severity": "WARN",
+      "category": "probe_failure",
+      "root_cause": "startup_timeout",
+      "component": "kubelet",
+      "summary": "Startup probe timed out",
+      "action_needed": "investigate"
+    },
+    {
+      "id": "network_policy_deny",
+      "template": "NetworkPolicy {policy_name} denied connection from {source_pod} to {dest_pod}:{port}",
+      "severity": "INFO",
+      "category": "network_error",
+      "root_cause": "network_policy_blocked",
+      "component": "network_policy",
+      "summary": "Connection blocked by NetworkPolicy",
+      "action_needed": "monitor"
+    },
+    {
+      "id": "admission_webhook_timeout",
+      "template": "failed calling webhook \"{webhook_name}\": Post \"https://{service}.{namespace}.svc:{port}/validate\": context deadline exceeded",
+      "severity": "ERROR",
+      "category": "apiserver_error",
+      "root_cause": "webhook_timeout",
+      "component": "apiserver",
+      "summary": "Admission webhook timed out",
+      "action_needed": "investigate"
+    }
+  ],
+  "variable_pools": {
+    "container": ["app", "nginx", "api", "worker", "processor", "frontend", "backend", "database"],
+    "pod_name": ["web-app", "api-server", "worker", "cache", "db-primary", "auth-service", "payment-processor"],
+    "namespace": ["default", "kube-system", "logging", "monitoring", "production", "staging"],
+    "image": ["nginx", "redis", "postgres", "python", "node", "alpine"],
+    "registry": ["docker.io", "gcr.io", "quay.io", "registry.k8s.io"],
+    "tag": ["latest", "v1.2.3", "stable", "1.19.0", "3.11-alpine"],
+    "hostname": ["loki-headless.logging.svc.cluster.local", "postgres.database.svc", "redis-master.cache.svc", "api.internal"],
+    "dns_server": ["10.43.0.10:53", "8.8.8.8:53"],
+    "ip": ["10.42.0.15", "10.42.1.23", "10.42.2.7", "192.168.1.100"],
+    "port": ["80", "443", "3000", "5432", "6379", "8080", "9090"],
+    "path": ["/health", "/ready", "/metrics", "/api/v1/health", "/"],
+    "status_code": ["500", "502", "503", "504", "404", "403"],
+    "volume_name": ["data-volume", "config-vol", "logs", "pvc-abc123"],
+    "pvc_name": ["data-pvc", "logs-pvc", "postgres-data"],
+    "configmap_name": ["app-config", "nginx-conf", "api-settings"],
+    "secret_name": ["db-credentials", "api-keys", "tls-cert"],
+    "serviceaccount": ["default", "app-sa", "monitoring-sa"],
+    "resource": ["pods", "configmaps", "secrets", "services"],
+    "verb": ["get", "list", "create", "update", "delete"],
+    "target_namespace": ["default", "production", "kube-system"],
+    "service_name": ["api-service", "db-service", "cache", "auth"],
+    "node_name": ["node1", "node2", "worker-01", "master"],
+    "quota_name": ["compute-quota", "pod-quota"],
+    "policy_name": ["deny-external", "allow-internal"],
+    "webhook_name": ["istio-validation", "policy-webhook"],
+    "memory_limit": ["512Mi", "1Gi", "2Gi"],
+    "user_agent": ["kube-probe/1.28", "curl/7.68.0", "Mozilla/5.0"]
+  }
+}

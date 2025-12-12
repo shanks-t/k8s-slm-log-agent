@@ -1,0 +1,41 @@
+---
+# EnvoyProxy configuration defines HOW the Envoy Proxy pods are deployed
+# This is where we control:
+# - Service type (NodePort vs LoadBalancer)
+# - Node placement (Node 1 vs Node 2)
+# - Resource limits, replicas, etc.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: envoy-proxy-config
+  namespace: envoy-gateway-system
+spec:
+  # Provider configures how Envoy Proxy runs in Kubernetes
+  provider:
+    type: Kubernetes
+    kubernetes:
+      # Configure the Service that exposes Envoy Proxy
+      envoyService:
+        type: LoadBalancer
+
+      # Configure the Deployment for Envoy Proxy pods
+      envoyDeployment:
+        # Number of Envoy Proxy replicas
+        replicas: 1  # Start with 1, can scale later
+
+        # Pod configuration
+        pod:
+          # Node selector ensures Envoy runs on Node 1 (control plane node)
+          # This aligns with your architecture: lightweight services on Node 1
+          nodeSelector:
+            hardware: light
+
+          # Annotations for the pods (optional, for observability later)
+          annotations:
+            prometheus.io/scrape: "true"
+            prometheus.io/port: "19001"
+
+          # Labels for the pods (helpful for monitoring)
+          labels:
+            app: envoy-proxy
+            component: gateway

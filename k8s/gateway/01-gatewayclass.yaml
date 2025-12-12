@@ -1,0 +1,18 @@
+---
+# GatewayClass defines which controller manages Gateway resources
+# Think of this as: "When I create a Gateway, use Envoy Gateway to handle it"
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: eg
+  annotations:
+    # This annotation tells Envoy Gateway to use specific configuration
+    # For now, we're using defaults, but you can customize later
+    gateway.envoyproxy.io/description: "Envoy Gateway for homelab infrastructure"
+spec:
+  # The controller that manages Gateways of this class
+  # This MUST match what Envoy Gateway controller is watching for
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+
+  # parametersRef allows advanced configuration (optional)
+  # We'll skip this for now - using Envoy Gateway defaults

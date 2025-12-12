@@ -1,0 +1,35 @@
+---
+# HTTPRoute for Grafana
+# Exposes Grafana UI via Envoy Gateway at http://<gateway-ip>/grafana
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: grafana-route
+  namespace: logging
+  labels:
+    app: grafana
+spec:
+  # Attach to the homelab-gateway in envoy-gateway-system namespace
+  parentRefs:
+    - name: homelab-gateway
+      namespace: envoy-gateway-system
+
+  # Routing rules
+  rules:
+    # Match all requests to /grafana path prefix
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /grafana
+
+      # Route to Grafana service
+      backendRefs:
+        - name: grafana
+          namespace: logging
+          port: 80
+
+# Note: Grafana is configured with:
+# - root_url: "%(protocol)s://%(domain)s/grafana"
+# - serve_from_sub_path: true
+# This means it expects to be served at /grafana and will handle
+# all assets and API calls correctly at that subpath

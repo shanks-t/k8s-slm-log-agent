@@ -1,0 +1,71 @@
+---
+# This is a TEST HTTPRoute to validate the Gateway works
+# You'll delete this later and create real routes for Grafana, FastAPI, etc.
+#
+# HTTPRoute defines routing rules: "When traffic arrives at the Gateway,
+# where should it go based on hostname or path?"
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: test-route
+  namespace: default
+spec:
+  # Which Gateway this route attaches to
+  parentRefs:
+    - name: homelab-gateway
+      namespace: envoy-gateway-system
+
+  # Routing rules
+  rules:
+    # Match all requests to path /test
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /test
+      # Route to a backend service
+      backendRefs:
+        - name: test-service
+          port: 8080
+
+---
+# Simple test service and deployment
+# This creates a basic HTTP service to test routing
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-service
+  namespace: default
+spec:
+  selector:
+    app: test-app
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-app
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test-app
+  template:
+    metadata:
+      labels:
+        app: test-app
+    spec:
+      # This test app WILL run on Node 2 because it doesn't have a nodeSelector
+      # and doesn't need the taint toleration - showing the taint is working!
+      containers:
+        - name: echo
+          image: hashicorp/http-echo:latest
+          args:
+            - "-text=Hello from homelab gateway!"
+            - "-listen=:8080"
+          ports:
+            - containerPort: 8080
