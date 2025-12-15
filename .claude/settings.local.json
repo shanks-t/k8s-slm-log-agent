@@ -28,7 +28,8 @@
       "WebFetch(domain:grafana.com)",
       "Bash(kubectl run:*)",
       "Bash(chmod:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "WebFetch(domain:book.kubebuilder.io)"
     ],
     "deny": [],
     "ask": []

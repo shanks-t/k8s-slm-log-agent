@@ -48,7 +48,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: loki-pvc
-  namespace: logging  # We'll create this namespace
+  namespace: logging 
   labels:
     app: loki
 spec:

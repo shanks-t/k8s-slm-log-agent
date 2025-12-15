@@ -1,0 +1,200 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: loganalysisjobs.intelligence.homelab.io
+  annotations:
+    controller-gen.kubebuilder.io/version: "manual"
+spec:
+  group: intelligence.homelab.io
+  scope: Namespaced
+  names:
+    plural: loganalysisjobs
+    singular: loganalysisjob
+    kind: LogAnalysisJob
+    shortNames:
+      - laj
+      - lajs
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          description: "LogAnalysisJob represents a request to analyze logs using LLM-based extraction"
+          properties:
+            apiVersion:
+              type: string
+              description: "APIVersion defines the versioned schema of this representation of an object"
+            kind:
+              type: string
+              description: "Kind is a string value representing the REST resource this object represents"
+            metadata:
+              type: object
+            spec:
+              type: object
+              description: "Spec defines the desired state of LogAnalysisJob"
+              required:
+                - timeRange
+                - analysisType
+              properties:
+                timeRange:
+                  type: object
+                  description: "Time range for log query"
+                  required:
+                    - start
+                    - duration
+                  properties:
+                    start:
+                      type: string
+                      format: date-time
+                      description: "Start time in RFC3339 format (e.g., 2025-12-14T10:00:00Z)"
+                      example: "2025-12-14T10:00:00Z"
+                    duration:
+                      type: string
+                      description: "Duration from start time (e.g., 1h, 30m, 2h30m)"
+                      pattern: '^([0-9]+h)?([0-9]+m)?([0-9]+s)?$'
+                      example: "1h"
+                namespace:
+                  type: string
+                  description: "Kubernetes namespace to filter logs (empty means all namespaces)"
+                  example: "default"
+                podSelector:
+                  type: object
+                  description: "Label selector to filter pods"
+                  additionalProperties:
+                    type: string
+                severity:
+                  type: array
+                  description: "Filter by log severity levels"
+                  items:
+                    type: string
+                    enum:
+                      - INFO
+                      - WARN
+                      - ERROR
+                      - CRITICAL
+                  example: ["ERROR", "CRITICAL"]
+                analysisType:
+                  type: string
+                  description: "Type of analysis to perform"
+                  enum:
+                    - root-cause
+                    - summary
+                    - triage
+                    - pattern-detection
+                    - what-changed
+                llmModel:
+                  type: string
+                  description: "LLM model to use for analysis"
+                  default: "llama-3.2-3b"
+                  example: "llama-3.2-3b"
+                maxTokens:
+                  type: integer
+                  description: "Maximum tokens for LLM response"
+                  default: 512
+                  minimum: 128
+                  maximum: 2048
+                temperature:
+                  type: number
+                  description: "LLM temperature for response generation"
+                  default: 0.3
+                  minimum: 0.0
+                  maximum: 2.0
+                lokiQuery:
+                  type: string
+                  description: "Custom LogQL query (overrides namespace/severity filters if provided)"
+                  example: '{namespace="default",level="error"} |= "OOMKilled"'
+            status:
+              type: object
+              description: "Status represents the observed state of LogAnalysisJob"
+              properties:
+                phase:
+                  type: string
+                  description: "Current phase of the job"
+                  enum:
+                    - Pending
+                    - Running
+                    - Completed
+                    - Failed
+                  default: "Pending"
+                startTime:
+                  type: string
+                  format: date-time
+                  description: "Time when job started processing"
+                completionTime:
+                  type: string
+                  format: date-time
+                  description: "Time when job completed or failed"
+                logsAnalyzed:
+                  type: integer
+                  description: "Number of log entries analyzed"
+                  minimum: 0
+                result:
+                  type: object
+                  description: "Analysis result"
+                  properties:
+                    rootCause:
+                      type: string
+                      description: "Identified root cause"
+                    severity:
+                      type: string
+                      description: "Assessed severity"
+                    component:
+                      type: string
+                      description: "Affected component"
+                    summary:
+                      type: string
+                      description: "Human-readable summary"
+                    recommendedAction:
+                      type: string
+                      description: "Recommended remediation action"
+                    confidence:
+                      type: number
+                      description: "Confidence score (0.0-1.0)"
+                      minimum: 0.0
+                      maximum: 1.0
+                    rawResponse:
+                      type: string
+                      description: "Raw LLM response"
+                error:
+                  type: string
+                  description: "Error message if job failed"
+                metrics:
+                  type: object
+                  description: "Performance metrics"
+                  properties:
+                    lokiQueryDurationMs:
+                      type: integer
+                      description: "Loki query duration in milliseconds"
+                    llmInferenceDurationMs:
+                      type: integer
+                      description: "LLM inference duration in milliseconds"
+                    totalDurationMs:
+                      type: integer
+                      description: "Total job duration in milliseconds"
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Phase
+          type: string
+          description: "Current job phase"
+          jsonPath: .status.phase
+        - name: Analysis Type
+          type: string
+          description: "Type of analysis"
+          jsonPath: .spec.analysisType
+        - name: Namespace
+          type: string
+          description: "Target namespace"
+          jsonPath: .spec.namespace
+          priority: 1
+        - name: Logs
+          type: integer
+          description: "Number of logs analyzed"
+          jsonPath: .status.logsAnalyzed
+          priority: 1
+        - name: Age
+          type: date
+          description: "Creation timestamp"
+          jsonPath: .metadata.creationTimestamp

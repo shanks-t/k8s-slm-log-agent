@@ -1,6 +1,6 @@
 ---
 # Logging namespace for all observability components
-# Loki, Promtail, and related services will live here
+# Loki, alloy and related services will live here
 apiVersion: v1
 kind: Namespace
 metadata:
