@@ -29,7 +29,8 @@
       "Bash(kubectl run:*)",
       "Bash(chmod:*)",
       "Bash(git add:*)",
-      "WebFetch(domain:book.kubebuilder.io)"
+      "WebFetch(domain:book.kubebuilder.io)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []
