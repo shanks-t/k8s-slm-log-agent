@@ -1,14 +1,12 @@
 [project]
 name = "k8s-slm-log-agent"
 version = "0.1.0"
-description = "Add your description here"
+description = "Kubernetes log intelligence platform with LLM-powered analysis"
 readme = "README.md"
-requires-python = ">=3.14"
-dependencies = [
-    "requests>=2.32.5",
-]
+requires-python = ">=3.12"
+dependencies = []
 
 [tool.uv.workspace]
 members = [
-    "log-analyzer-service/log-analyzer",
+    "services/log-analyzer",
 ]
