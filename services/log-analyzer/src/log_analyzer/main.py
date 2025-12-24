@@ -1,10 +1,12 @@
 """FastAPI application for log analysis and extraction."""
 
+import json
 import httpx
 from datetime import datetime
 
+
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from log_analyzer.models.requests import AnalyzeRequest
 
@@ -193,6 +195,147 @@ async def analyze_logs(request: AnalyzeRequest):
         "analysis": analysis,
         "logs": normalized,  # optional: remove later
     }
+
+
+def build_text_header(normalized_logs, time_range):
+    lines = [
+        "=== Log Analyzer ===",
+        "Cluster: homelab",
+        f"Time Window: {time_range.start.date()} → {time_range.end.date()}",
+        f"Log Count: {len(normalized_logs)}",
+        "",
+        "--- Logs ---",
+    ]
+
+    for log in normalized_logs:
+        lines.append(
+            f"[{log['time']}] {log['source']} "
+            f"(pod={log.get('pod')}, node={log.get('node')})"
+        )
+        lines.append(log["message"])
+        lines.append("")
+
+    lines.append("--- Analysis ---")
+    lines.append("")  # blank line before streaming starts
+    return "\n".join(lines)
+
+
+async def stream_llm(prompt: str):
+    timeout = httpx.Timeout(
+        connect=5.0,
+        write=5.0,
+        pool=5.0,
+        read=None,  # IMPORTANT: disable read timeout for streaming
+    )
+
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        async with client.stream(
+            "POST",
+            f"{LLAMA_URL}/v1/chat/completions",
+            json={
+                "model": MODEL_NAME,
+                "stream": True,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a Kubernetes reliability engineer.\n"
+                            "Analyze logs and identify whether action is required.\n"
+                            "If logs are informational, clearly say so.\n"
+                            "Write plain text, not Markdown."
+                        ),
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                "max_tokens": 200,
+                "temperature": 0.3,
+            },
+        ) as resp:
+            async for line in resp.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+
+                data = line.removeprefix("data: ").strip()
+                if data == "[DONE]":
+                    break
+
+                payload = json.loads(data)
+                delta = payload["choices"][0].get("delta", {})
+                content = delta.get("content")
+                if content:
+                    yield content
+
+
+@app.post("/v1/analyze/stream")
+async def analyze_logs_stream(request: AnalyzeRequest):
+    query = build_logql_query(request.filters)
+
+    params = {
+        "query": query,
+        "limit": request.limit,
+        "start": int(request.time_range.start.timestamp() * 1e9),
+        "end": int(request.time_range.end.timestamp() * 1e9),
+        "direction": "backward",
+    }
+
+    # --- Query Loki ---
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.get(
+            f"{LOKI_URL}/loki/api/v1/query_range",
+            params=params,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+    results = data.get("data", {}).get("result", [])
+    if not results:
+        return JSONResponse(
+            status_code=404,
+            content={"error": "No logs found"},
+        )
+
+    # --- Flatten logs ---
+    logs = []
+    for result in results:
+        labels = result["stream"]
+        for ts_ns, line in result["values"]:
+            logs.append(
+                {
+                    "timestamp": datetime.utcfromtimestamp(int(ts_ns) / 1e9).isoformat()
+                    + "Z",
+                    "message": line.strip(),
+                    "labels": labels,
+                }
+            )
+
+    if not logs:
+        return JSONResponse(
+            status_code=404,
+            content={"error": "No logs found"},
+        )
+
+    # --- Normalize ---
+    normalized = [normalize_log(l) for l in logs]
+
+    # --- Prompt ---
+    prompt = build_llm_prompt(normalized, request.time_range)
+
+    header = build_text_header(normalized, request.time_range)
+
+    async def event_stream():
+        # Send header immediately
+        yield header + "\n"
+
+        # Stream model output
+        async for chunk in stream_llm(prompt):
+            yield chunk
+
+        yield "\n\n=== End of Analysis ===\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/plain",
+    )
 
 
 if __name__ == "__main__":
