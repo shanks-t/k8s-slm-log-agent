@@ -32,7 +32,7 @@ uv run pytest -m unit -v
 ### Run Integration Tests Only
 ```bash
 # Prerequisites: Start port-forwarding first!
-make dev
+just dev
 
 # In another terminal
 uv run pytest -m integration -v
@@ -41,7 +41,7 @@ uv run pytest -m integration -v
 ### Run All Tests
 ```bash
 # Start services first
-make dev
+just dev
 
 # Run everything (unit + integration)
 uv run pytest -m "" -v
@@ -53,7 +53,7 @@ Integration tests require real Kubernetes services to be accessible:
 
 1. **Start port-forwarding**:
    ```bash
-   make dev
+   just dev
    ```
    This forwards:
    - Loki: `localhost:3100`
@@ -75,7 +75,7 @@ Integration tests require real Kubernetes services to be accessible:
 Integration tests will **automatically skip** with a helpful message:
 ```
 SKIPPED [1] tests/conftest.py:246: Loki not available at http://localhost:3100.
-Run 'make dev' to start port-forwarding.
+Run 'just dev' to start port-forwarding.
 ```
 
 ## Test Markers
@@ -150,8 +150,8 @@ uv run pytest
 ps aux | grep "port-forward"
 
 # Restart port-forwarding
-make stop
-make dev
+just stop
+just dev
 ```
 
 ### Tests fail after code changes
