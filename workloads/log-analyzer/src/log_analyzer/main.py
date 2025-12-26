@@ -1,5 +1,6 @@
 """FastAPI application for log analysis and extraction."""
 
+from contextlib import asynccontextmanager
 import json
 import httpx
 from datetime import datetime
@@ -15,10 +16,22 @@ LLAMA_URL = "http://localhost:8080"
 MODEL_NAME = "llama-3.2-3b-instruct"
 
 
+@asynccontextmanager
+async def check_dependencies(app: FastAPI):
+    # startup phase
+    async with httpx.AsyncClient(timeout=2) as client:
+        await client.get(f"{LOKI_URL}/ready")
+        await client.get(f"{LLAMA_URL}/v1/models")
+
+    # hand conrol back to FastAPI
+    yield
+
+
 app = FastAPI(
     title="Log Analyzer Service",
     description="LLM-powered log analysis and structured extraction",
     version="0.1.0",
+    lifespan=check_dependencies,
 )
 
 
