@@ -49,3 +49,39 @@ stop:
     fi
     # Remove runtime state
     rm -f {{dev_pids}}
+
+# Run unit tests (fast, mocked dependencies)
+test:
+    @echo "Running unit tests..."
+    @cd workloads/log-analyzer && uv run pytest -v
+
+# Run integration tests (requires services running via 'just dev')
+test-int:
+    @echo "Running integration tests..."
+    @cd workloads/log-analyzer && uv run pytest -m integration -v
+
+# Run all tests (unit + integration)
+test-all:
+    @echo "Running all tests..."
+    @cd workloads/log-analyzer && uv run pytest -m "" -v
+
+# Test the streaming analyze endpoint with optional namespace filter
+test-stream namespace="kube-system":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    START=$(date -u -v-24H +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+    END=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+    curl -N -X POST http://127.0.0.1:8000/v1/analyze/stream \
+      -H "Content-Type: application/json" \
+      -d "{
+        \"time_range\": {
+          \"start\": \"$START\",
+          \"end\": \"$END\"
+        },
+        \"filters\": {
+          \"namespace\": \"{{namespace}}\"
+        },
+        \"limit\": 2
+      }"
