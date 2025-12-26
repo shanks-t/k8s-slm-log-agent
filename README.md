@@ -1,14 +1,78 @@
-# Homelab Log Intelligence Platform — Architecture & Implementation Guide
+# Homelab Log Intelligence Platform
 
-This document summarizes the recommended architecture for running a Kubernetes-based log intelligence system in a two-node homelab, and provides a phased roadmap for implementation.
+A Kubernetes-based log intelligence system that combines small language models with retrieval-augmented generation (RAG) to analyze, extract, and summarize logs from a two-node homelab cluster.
+
+## Overview
+
+This project implements a production-inspired observability pipeline that ingests logs from Kubernetes infrastructure and applications, uses vector embeddings for semantic search, and leverages local LLM inference (llama.cpp) to perform structured extraction, triage, and summarization of log data.
+
+**Key Components:**
+- Log collection and storage (Grafana Alloy, Loki)
+- LLM serving layer (llama.cpp with Llama 3.2 3B)
+- FastAPI log analyzer service
+- Vector database for RAG retrieval
+- OpenTelemetry instrumentation
+- Evaluation framework with golden dataset
+
+## Local Development
+
+This project uses `just` for local development workflows. All commands should be run from the repository root.
+
+### Available Commands
+
+```bash
+# Start development environment (port-forwards Loki and LLM services)
+just dev
+
+# Stop all dev processes
+just stop
+
+# Run unit tests (fast, mocked dependencies)
+just test
+
+# Run integration tests (requires 'just dev' running)
+just test-int
+
+# Run all tests (unit + integration)
+just test-all
+
+# Test the streaming analyze endpoint
+just test-stream [namespace]
+
+# List all available recipes
+just --list
+```
+
+### Development Workflow
+
+1. Start the development environment to forward Kubernetes services to localhost:
+   ```bash
+   just dev
+   ```
+
+2. In another terminal, run tests or make API calls:
+   ```bash
+   just test
+   just test-stream kube-system
+   ```
+
+3. The FastAPI service will be available at `http://127.0.0.1:8000` with auto-reload enabled.
+
+See `workloads/log-analyzer/tests/README.md` for detailed testing documentation.
+
+---
+
+## Architecture & Implementation Guide
+
+This section summarizes the architecture for running a Kubernetes-based log intelligence system in a two-node homelab, and provides a phased roadmap for implementation.
 
 The goal is to build a realistic, production-inspired observability + LLM pipeline that supports:
 
-- Structured log ingestion (infra + application)  
-- RAG-powered log retrieval  
-- LLM-based extraction, triage, and summarization  
-- OpenTelemetry instrumentation  
-- Evaluation + drift detection with a golden dataset  
+- Structured log ingestion (infra + application)
+- RAG-powered log retrieval
+- LLM-based extraction, triage, and summarization
+- OpenTelemetry instrumentation
+- Evaluation + drift detection with a golden dataset
 - Efficient multi-node workload distribution (Node 1 vs Node 2)
 
 ---
@@ -62,7 +126,6 @@ To maximize performance and reflect production-grade design patterns:
 - LLM servers (3B–8B)  
 - Vector DB + embeddings  
 - Loki for log storage  
-- RAG retrieval components  
 - Evaluation / batch jobs  
 
 ### **Run control-plane & UX services on Node 1**
@@ -70,9 +133,8 @@ To maximize performance and reflect production-grade design patterns:
 - Ingress controller / API gateway  
 - Grafana dashboards  
 - Log analyzer API (FastAPI)  
-- OTel Collector (agent + gateway mode)  
-- grafana alloy / Fluent Bit  
-- Any stateless routing/query services  
+- TODO: OTel Collector (agent + gateway mode)  
+- grafana alloy
 
 ### **Rationale**
 - Node 2’s memory bandwidth + NVMe drastically improves LLM and vector DB performance.
@@ -93,7 +155,7 @@ To maximize performance and reflect production-grade design patterns:
   - Persistent volume on NVMe
   - High ingest and query performance
 
-### **Metrics & Traces**
+### **Metrics & Traces** TODO:
 - OpenTelemetry Collector:
   - **Agent mode** on both nodes for log collection
   - **Gateway mode** on Node 1 as central trace+metric router
@@ -105,8 +167,8 @@ To maximize performance and reflect production-grade design patterns:
 ### **Dashboards**
 - Grafana on Node 1
   - Explore logs (Loki)
-  - Explore traces (Tempo)
-  - Analyze metrics (Prometheus)
+  - TODO: Explore traces (Tempo)
+  - TODO: Analyze metrics (Prometheus)
 
 ---
 
@@ -116,20 +178,18 @@ This system provides structured extraction, triage, and summarization of logs us
 
 ### **Components on Node 2**
 - llama.cpp deployments (3B + 7B variants)  
-- Vector DB (Chroma/LanceDB/Qdrant)  
-- Embedding workers (CPU-optimized)  
+- TODO: Vector DB (Chroma/LanceDB/Qdrant)  
+- TODO: Embedding workers (CPU-optimized)  
 
 ### **Components on Node 1**
 - Log analyzer API (FastAPI)
   - Routes queries to Loki  
-  - Chunks logs  
-  - Embeds → vector search → retrieval  
   - Calls LLM inference → structured extraction  
-  - Emits OTel spans/metrics  
+  - TODO: Emits OTel spans/metrics  
 - Ingress routing for public/internal access
 - Dashboards for insights
 
-### **Extraction Tasks Supported**
+### **Extraction Tasks Supported** TODO:
 - Structured extraction (root cause, component, error signatures)
 - Summaries over time windows
 - Triage ranking of errors
@@ -138,7 +198,7 @@ This system provides structured extraction, triage, and summarization of logs us
 
 ---
 
-# 5. Evaluation & Drift Detection
+# 5. Evaluation & Drift Detection TODO:
 
 To ensure the log intelligence system remains correct over time:
 
@@ -192,148 +252,3 @@ To ensure the log intelligence system remains correct over time:
     - Evaluation CronJobs
     - Retrieval components
     - Heavy compute workloads
-
-
----
-
-# 7. Implementation Roadmap (Phased Steps)
-
-Below is a clean, incremental roadmap for implementing the full system.
-
----
-
-## **Phase 1 — Cluster Restructuring** ✅ COMPLETE
-1. ✅ Move the Kubernetes control plane from Node 2 → Node 1
-2. ✅ Confirm node labels:
-   - Node 1 → `hardware=light`
-   - Node 2 → `hardware=heavy`
-3. ✅ Apply node taints:
-   - Node 2: `heavy=true:NoSchedule`
-4. ✅ Configure node selectors for heavy services to run only on Node 2
-5. ✅ Install and configure Envoy Gateway
-   - Disabled Traefik
-   - Deployed Envoy Gateway on Node 1
-   - LoadBalancer service via K3s servicelb
-   - Validated with test HTTPRoute  
-
----
-
-## **Phase 2 — Logging Infrastructure** ✅ COMPLETE
-1. ✅ Mount and configure Samsung NVMe on Node 2 at `/mnt/k8s-storage`
-2. ✅ Deploy Loki on Node 2 with persistent storage on Samsung NVMe
-3. ✅ Deploy Grafana Alloy DaemonSet on both nodes (replaces deprecated Promtail)
-4. ✅ Install Grafana on Node 1 (via Helm)
-5. ✅ Configure Grafana data source for Loki
-6. ✅ Create HTTPRoute to expose Grafana via Envoy Gateway at http://10.0.0.102/grafana
-7. ✅ Fix cross-node networking (opened UDP port 8472 for VXLAN)
-8. ✅ Validate: View container logs in Grafana
-
-**Technology Decisions:**
-- **Grafana Alloy instead of Promtail:** Promtail is deprecated (EOL March 2026). Alloy is the replacement and offers unified log/metrics/trace collection, better performance, and active development. This also simplifies Phase 4 by eliminating the need for separate OpenTelemetry Collector deployment.
-- **OpenTelemetry integration:** Deferred to Phase 4 when FastAPI service is instrumented. Alloy will handle OTel trace collection when needed.  
-
----
-
-## **Phase 3 — LLM Serving Layer + Evaluation Setup**
-**Revised approach:** Build evaluation infrastructure BEFORE full deployment to measure performance with real data.
-
-1. ✅ Extract 200 sample logs from Loki → Create golden dataset
-   - Mix of Kubernetes infra logs and application logs
-   - Label with ground truth: root cause, severity, component, summary, action needed
-   - **Status:** Complete - hybrid approach implemented
-     - Enhanced extraction script with noise filtering, severity detection, and stratified sampling
-     - 30+ synthetic log templates covering diverse K8s failure scenarios
-     - Scripts: `extract_golden_dataset.py`, `synthesize_logs.py`, `combine_datasets.py`, `dataset_analysis.py`
-     - Target: 150 logs (70% real, 30% synthetic) with 25% INFO, 25% WARN, 40% ERROR, 10% CRITICAL
-
-2. ✅ Deploy llama.cpp on Node 2 (Llama 3.2 3B model)
-   - **Status:** Complete and tested
-   - **Model:** Llama 3.2 3B Instruct Q4_K_M (1.87 GB)
-   - **Performance:** 19.75 tokens/sec (CPU-only with AVX_VNNI)
-   - **Namespace:** `llm`
-   - **Resources:** 10 CPU cores, 6-10 GB memory
-   - **Storage:** `/mnt/k8s-storage/models` via local PersistentVolume on Node 2
-   - **API:** OpenAI-compatible endpoint at `llama-cpp.llm.svc.cluster.local:8080`
-   - **Manifests:** `k8s/llama-cpp/`
-   - **Tested:** Chat completions working correctly with proper Kubernetes troubleshooting responses
-
-3. Deploy Chroma vector DB on Node 2 with persistent storage
-4. Deploy embedding model (BGE-small-en-v1.5) on Node 2
-5. Build evaluation framework:
-   - Extraction accuracy metrics
-   - Embedding quality (retrieval precision/recall)
-   - RAG relevance scoring
-   - LLM output quality vs ground truth
-   - End-to-end latency measurements
-6. Run baseline evaluation with golden dataset
-7. Iterate on prompts/configs based on metrics
-
-**Rationale:** Understanding model limitations early allows data-driven iteration before building full RAG pipeline in Phase 4.
-
-**Technology Decisions:**
-- **Llama 3.2 3B Q4_K_M:** Good balance of quality vs speed for CPU inference (vs 1B or 7B variants)
-- **llama.cpp:** CPU-optimized with AVX_VNNI support for Intel 12th gen (i7-12700T)
-- **BGE-small-en-v1.5:** Better retrieval quality than E5-small (33M params)
-- **Dedicated `llm` namespace:** Clean separation of ML workloads from infrastructure  
-
----
-
-## **Phase 4 — Log Retrieval + RAG Pipeline**
-1. Build FastAPI log analyzer service on Node 1  
-2. Implement:
-   - Loki querying  
-   - Log chunking (300–800 tokens)  
-   - Embedding generation  
-   - Vector search for RAG  
-3. Add OpenTelemetry spans for:
-   - Retrieval  
-   - Embedding  
-   - Vector search  
-   - LLM inference  
-   - Post-processing  
-4. Expose via Ingress  
-
----
-
-## **Phase 5 — LLM Extraction + Summarization**
-1. Implement structured extraction prompts (infra + app log variants)  
-2. Implement summarization and triage prompts  
-3. Store extracted JSON results in PostgreSQL/DuckDB  
-4. Build Grafana dashboards to visualize outputs  
-
----
-
-## **Phase 6 — Evaluation + Drift Detection**
-1. Build golden dataset for infra/app logs  
-2. Implement evaluation job (CronJob on Node 2)  
-3. Compute:
-   - Accuracy  
-   - Root cause identification  
-   - Severity correctness  
-4. Emit OTel metrics to Prometheus  
-5. Build evaluation dashboards + alerts  
-
----
-
-## **Phase 7 — (Optional) Migrate to Full Kubernetes**
-1. Replace K3s with kubeadm or “Kubernetes the Hard Way”  
-2. Migrate workloads using the same Helm charts/manifests  
-3. Validate:
-   - Scheduling  
-   - Affinity rules  
-   - Control-plane separation  
-   - Production-like behavior  
-
----
-
-# 8. Summary
-
-This design gives you:
-
-- A scalable, CPU-optimized LLM logging pipeline  
-- A realistic multi-node Kubernetes architecture  
-- Full observability using OpenTelemetry  
-- Production-style evaluation and drift detection  
-- Hands-on experience in LLM serving, RAG, log analytics, and K8s infrastructure  
-
-    This Markdown file can be used directly by you or an LLM assistant to guide implementation, automate provisioning, or refactor components as your homelab evolves.
