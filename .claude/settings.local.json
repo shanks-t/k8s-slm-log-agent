@@ -40,7 +40,9 @@
       "Bash(node1 'sudo iptables -t nat -L PREROUTING -n -v | grep -E \"\"\\(Chain|80|31046\\)\"\"')",
       "Bash(node1 'curl -I http://10.0.0.102/grafana')",
       "Bash(node1 'sudo ufw status')",
-      "Bash(node1:*)"
+      "Bash(node1:*)",
+      "Bash(uv run pytest:*)",
+      "WebFetch(domain:just.systems)"
     ],
     "deny": [],
     "ask": []
