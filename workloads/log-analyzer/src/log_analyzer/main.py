@@ -3,7 +3,7 @@
 from contextlib import asynccontextmanager
 import json
 import httpx
-from datetime import datetime
+from datetime import datetime, UTC
 
 
 from fastapi import FastAPI
@@ -181,8 +181,7 @@ async def analyze_logs(request: AnalyzeRequest):
         for ts_ns, line in result["values"]:
             logs.append(
                 {
-                    "timestamp": datetime.utcfromtimestamp(int(ts_ns) / 1e9).isoformat()
-                    + "Z",
+                    "timestamp": datetime.fromtimestamp(int(ts_ns) / 1e9, UTC).isoformat().replace("+00:00", "Z"),
                     "message": line.strip(),
                     "labels": labels,
                 }
@@ -314,8 +313,7 @@ async def analyze_logs_stream(request: AnalyzeRequest):
         for ts_ns, line in result["values"]:
             logs.append(
                 {
-                    "timestamp": datetime.utcfromtimestamp(int(ts_ns) / 1e9).isoformat()
-                    + "Z",
+                    "timestamp": datetime.fromtimestamp(int(ts_ns) / 1e9, UTC).isoformat().replace("+00:00", "Z"),
                     "message": line.strip(),
                     "labels": labels,
                 }
