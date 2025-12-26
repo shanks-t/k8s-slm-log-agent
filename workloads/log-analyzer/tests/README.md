@@ -7,43 +7,51 @@ This directory contains behavior-driven tests for the log analyzer service, foll
 We have two types of tests:
 
 ### 🚀 Unit Tests (Fast, Mocked Dependencies)
-- **Files**: `test_analyze.py`, `test_analyze_stream.py`
+- **File**: `test_unit.py`
 - **Fixtures**: Use `test_client` with `MockTransport`
 - **Purpose**: Verify API behavior with predictable, fast test doubles
 - **When to use**: Default for TDD, regression testing, CI/CD
+- **Organization**: Tests are grouped by endpoint with clear section markers
 
 ### 🌐 Integration Tests (Real Services)
-- **Files**: `test_analyze_integration.py`, `test_analyze_stream_integration.py`
+- **File**: `test_integration.py`
 - **Fixtures**: Use `integration_client` with real HTTP calls
 - **Purpose**: Verify end-to-end behavior with actual Loki and llama.cpp
 - **When to use**: Before releases, after infrastructure changes, debugging
+- **Note**: Each test is comprehensive and validates multiple aspects (status, structure, LLM output, limits, filters) in a single test run for efficiency
 
 ## Running Tests
 
-### Run Unit Tests Only (Default)
+### From Repository Root (Recommended)
+
+Use these `just` commands from anywhere in the repo:
+
+```bash
+# Run unit tests (fast, default)
+just test
+
+# Run integration tests (requires 'just dev' running)
+just test-int
+
+# Run all tests (unit + integration)
+just test-all
+```
+
+### From workloads/log-analyzer Directory
+
+If you're already in the `workloads/log-analyzer` directory:
+
 ```bash
 # Fast feedback loop - runs in ~0.1s
 uv run pytest
 
-# Explicit
+# Explicit unit tests
 uv run pytest -m unit -v
-```
 
-### Run Integration Tests Only
-```bash
-# Prerequisites: Start port-forwarding first!
-just dev
-
-# In another terminal
+# Integration tests (requires port-forwarding)
 uv run pytest -m integration -v
-```
 
-### Run All Tests
-```bash
-# Start services first
-just dev
-
-# Run everything (unit + integration)
+# All tests
 uv run pytest -m "" -v
 ```
 
@@ -51,7 +59,7 @@ uv run pytest -m "" -v
 
 Integration tests require real Kubernetes services to be accessible:
 
-1. **Start port-forwarding**:
+1. **Start port-forwarding** (from repo root):
    ```bash
    just dev
    ```
@@ -65,9 +73,9 @@ Integration tests require real Kubernetes services to be accessible:
    curl http://localhost:8080/v1/models
    ```
 
-3. **Run integration tests**:
+3. **Run integration tests** (from repo root):
    ```bash
-   uv run pytest -m integration -v
+   just test-int
    ```
 
 ### What if services aren't running?
@@ -77,6 +85,16 @@ Integration tests will **automatically skip** with a helpful message:
 SKIPPED [1] tests/conftest.py:246: Loki not available at http://localhost:3100.
 Run 'just dev' to start port-forwarding.
 ```
+
+### Why consolidate integration tests?
+
+Integration tests hit real services and are slow (~10-40s each). We consolidate related assertions into comprehensive tests because:
+- ✅ Reduces total test time (fewer service calls)
+- ✅ Less code duplication and maintenance
+- ✅ Tests complete user workflows, not isolated behaviors
+- ✅ Multiple assertions about the same integration scenario make sense
+
+This differs from unit tests, which should remain focused and test one behavior each.
 
 ## Test Markers
 
@@ -93,10 +111,18 @@ import pytest
 from datetime import datetime, UTC
 
 @pytest.mark.unit
-def test_new_behavior(test_client):
-    """BEHAVIOR: What the API should do."""
+def test_new_endpoint_behavior(test_client):
+    """
+    BEHAVIOR: What the API should do.
+
+    Why this matters to users.
+    """
     response = test_client.post("/v1/endpoint", json={...})
     assert response.status_code == 200
+
+    # Unit tests should focus on ONE specific behavior
+    data = response.json()
+    assert "expected_field" in data
 ```
 
 ### Adding an Integration Test
@@ -105,10 +131,27 @@ import pytest
 from datetime import datetime, UTC
 
 @pytest.mark.integration
-def test_new_integration(integration_client):
-    """INTEGRATION: Verify with real services."""
+def test_new_endpoint_integration(integration_client):
+    """
+    INTEGRATION: Verify /v1/new-endpoint works end-to-end.
+
+    This test verifies:
+    - Status codes (200/404)
+    - Response structure
+    - Data validation
+    - Any filters or parameters
+    """
     response = integration_client.post("/v1/endpoint", json={...})
-    assert response.status_code == 200
+
+    assert response.status_code in [200, 404], \
+        f"Expected 200 or 404, got {response.status_code}: {response.text}"
+
+    if response.status_code == 200:
+        data = response.json()
+        # Multiple related assertions are fine for integration tests
+        assert "field1" in data
+        assert "field2" in data
+        assert len(data["items"]) <= limit
 ```
 
 ## Test Philosophy
@@ -122,25 +165,32 @@ From `docs/test-principles.md`:
 
 ### Example: Why Two Test Types?
 
-**Unit Test** (`test_analyze.py`):
-- Verifies: "POST /v1/analyze returns log_count, analysis, logs"
+**Unit Test** (`test_unit.py`):
+- Verifies: Individual behaviors like "POST /v1/analyze returns JSON structure"
 - Uses: Mocked Loki and LLM responses
 - Speed: ~0.01s per test
+- Assertions: Focused on ONE specific behavior per test
+- Organization: Grouped by endpoint in single file
 - When: Every code change, TDD loop, CI pipeline
 
-**Integration Test** (`test_analyze_integration.py`):
+**Integration Test** (`test_integration.py`):
 - Verifies: "Full pipeline works with real Loki and llama.cpp"
 - Uses: Actual K8s services via port-forward
-- Speed: ~2-5s per test (depends on LLM)
+- Speed: ~10-40s per test (depends on LLM)
+- Assertions: Comprehensive, covering multiple aspects in one test
 - When: Before deploys, debugging issues, validating infrastructure
 
-Both follow the same behavior-driven principles - they just differ in their dependencies.
+Both follow behavior-driven principles - they differ in dependencies and assertion scope.
 
 ## Troubleshooting
 
 ### "Module not found" errors
 ```bash
-cd /path/to/log-analyzer
+# From repo root
+just test
+
+# Or navigate to the workload
+cd workloads/log-analyzer
 uv run pytest
 ```
 
@@ -171,6 +221,21 @@ uv run pytest -v -rs
 ## CI/CD Integration
 
 Example GitHub Actions:
+
+```yaml
+# Unit tests (fast, no dependencies)
+- name: Run unit tests
+  run: just test
+
+# Integration tests (requires K8s cluster)
+- name: Run integration tests
+  run: |
+    just dev &  # Start port-forwarding in background
+    sleep 5     # Wait for services to be ready
+    just test-int
+```
+
+Or using direct `uv run pytest` commands:
 
 ```yaml
 # Unit tests (fast, no dependencies)
