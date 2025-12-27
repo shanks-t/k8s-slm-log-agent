@@ -7,6 +7,7 @@ metadata:
   name: infrastructure
   namespace: flux-system
 spec:
+  suspend: true          # SAFE MODE: Prevents reconciliation until removed
   interval: 10m          # Check Git every 10 minutes
   retryInterval: 1m      # Retry failures after 1 minute
   timeout: 5m            # Max time for apply operations
