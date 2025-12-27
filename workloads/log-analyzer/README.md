@@ -221,13 +221,15 @@ If you see `"the request exceeds the available context size"` errors in LLM logs
 
 ### No Logs Found
 
-Check the time range and filters in your request. The service filters logs to only include errors/warnings by default:
+Check the time range and filters in your request. The service no longer applies restrictive default filters - noise filtering happens upstream at the Alloy ingestion level.
 
-```logql
-{namespace="..."} |~ "(?i)(error|warn|failed|exception|panic|fatal)"
-```
+**Noise filtering strategy:**
+- **Alloy (ingestion)**: Drops health checks, successful access logs (200), and k8s probes before storage
+- **Log-analyzer (retrieval)**: Retrieves all logs unless a custom `log_filter` is specified
 
-To see all logs, provide a custom `log_filter` in the request.
+If you still see "no logs found", the namespace may genuinely have no logs in the specified time range, or Alloy's drop filters may be too aggressive.
+
+To see ALL logs including those dropped by Alloy, temporarily remove the `stage.drop` blocks from `platform/o11y/03-alloy-values.yaml` and redeploy.
 
 ### Traces Not Appearing in Tempo
 

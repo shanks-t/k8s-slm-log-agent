@@ -86,10 +86,9 @@ def build_logql_query(filters) -> str:
     # Add log line filter if provided
     if filters.log_filter:
         query += f' |~ "{filters.log_filter}"'
-    else:
-        # TODO: need to review how logs are classified to make sure i am not filtering out important logs
-        # Default: only get errors and warnings
-        query += ' |~ "(?i)(error|warn|failed|exception|panic|fatal)"'
+    # No default filter - noise is already filtered at Alloy ingestion level
+    # Alloy drops: health checks, successful access logs (200), k8s probes
+    # This allows operational logs (slot updates, cancellations, etc.) to be analyzed
 
     return query
 
