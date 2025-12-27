@@ -42,7 +42,20 @@
       "Bash(node1 'sudo ufw status')",
       "Bash(node1:*)",
       "Bash(uv run pytest:*)",
-      "WebFetch(domain:just.systems)"
+      "WebFetch(domain:just.systems)",
+      "Bash(helm install:*)",
+      "Bash(helm uninstall:*)",
+      "Bash(kubectl wait:*)",
+      "Bash(helm upgrade:*)",
+      "Bash(kubectl delete:*)",
+      "Bash(python3:*)",
+      "Bash(docker build:*)",
+      "Bash(sudo k3s ctr images import:*)",
+      "Bash(scp:*)",
+      "Bash(docker save:*)",
+      "Bash(just dev-k8s:*)",
+      "Bash(just test-k8s-local:*)",
+      "Bash(just test-k8s:*)"
     ],
     "deny": [],
     "ask": []

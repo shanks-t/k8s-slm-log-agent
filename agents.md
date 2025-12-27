@@ -248,19 +248,23 @@ Below is a clean, incremental roadmap for implementing the full system.
 
 ---
 
-## **Phase 2 — Logging Infrastructure** ✅ COMPLETE
+## **Phase 2 — Observability Infrastructure** ✅ COMPLETE
 1. ✅ Mount and configure Samsung NVMe on Node 2 at `/mnt/k8s-storage`
-2. ✅ Deploy Loki on Node 2 with persistent storage on Samsung NVMe
+2. ✅ Deploy Loki on Node 2 with persistent storage on Samsung NVMe (200GB PVC)
 3. ✅ Deploy Grafana Alloy DaemonSet on both nodes (replaces deprecated Promtail)
 4. ✅ Install Grafana on Node 1 (via Helm)
 5. ✅ Configure Grafana data source for Loki
 6. ✅ Create HTTPRoute to expose Grafana via Envoy Gateway at http://10.0.0.102/grafana
 7. ✅ Fix cross-node networking (opened UDP port 8472 for VXLAN)
-8. ✅ Validate: View container logs in Grafana
+8. ✅ Deploy Tempo on Node 2 for distributed tracing (50GB PVC)
+9. ✅ Configure Tempo datasource in Grafana with trace-to-logs correlation
+10. ✅ Validate: View container logs in Grafana and distributed traces from instrumented services
 
 **Technology Decisions:**
-- **Grafana Alloy instead of Promtail:** Promtail is deprecated (EOL March 2026). Alloy is the replacement and offers unified log/metrics/trace collection, better performance, and active development. This also simplifies Phase 4 by eliminating the need for separate OpenTelemetry Collector deployment.
-- **OpenTelemetry integration:** Deferred to Phase 4 when FastAPI service is instrumented. Alloy will handle OTel trace collection when needed.  
+- **Grafana Alloy instead of Promtail:** Promtail is deprecated (EOL March 2026). Alloy is the replacement and offers unified log/metrics/trace collection, better performance, and active development. Ready for future OTel trace collection if needed.
+- **Tempo for distributed tracing:** Lightweight, cost-effective tracing backend designed for high-volume environments. Works seamlessly with Grafana for trace visualization and correlation.
+- **OpenTelemetry integration:** Services instrumented with OpenTelemetry SDK send traces to Tempo via OTLP (gRPC on port 4317). This provides vendor-neutral instrumentation that works across languages and frameworks.
+- **Trace-to-logs correlation:** Grafana configured with derived fields to extract trace_id from Loki logs and link to Tempo traces. Bidirectional navigation between traces and logs.  
 
 ---
 
@@ -297,31 +301,58 @@ This phase establishes the foundation for evaluation-driven development.
 ---
 
 ## **Phase 3A — Baseline: Time-Based Retrieval**
+**Status:** 🔄 IN PROGRESS
+
 **Goal:** Establish baseline extraction accuracy using simple time-ordered log retrieval (no vector DB).
 
-1. Deploy FastAPI log analyzer service on Node 1
+### Completed:
+1. ✅ Deploy FastAPI log analyzer service on Node 1
    - Namespace: `log-analyzer`
-   - Node selector: `hardware=light`
-   - Resources: 2 CPU cores, 2GB memory
-   - Expose via Envoy Gateway HTTPRoute
+   - Node selector: `hardware=light` (deployed on Node 1)
+   - Resources: 200m CPU (request), 1 core (limit), 256Mi-1Gi memory
+   - Kubernetes manifests in `workloads/log-analyzer/k8s/`
+   - Container image build process documented with ARM64→AMD64 cross-compilation
+   - **Status:** Deployed and verified working
 
-2. Implement simple retrieval pipeline:
+2. ✅ Implement simple retrieval pipeline:
    - Query Loki using LogQL for time-range filtered logs
-   - Example: `{namespace="logging"} | json | severity="error" [1h]`
-   - Return top N logs ordered by timestamp (most recent first)
-   - No embedding, no semantic search
+   - LogQL query builder with namespace, pod, container, node filters
+   - Default filter: `|~ "(?i)(error|warn|failed|exception|panic|fatal)"`
+   - Returns top N logs ordered by timestamp (most recent first)
+   - No embedding, no semantic search (as designed for baseline)
+   - Configurable limit (default: 15, max: 200) to stay within LLM context window
 
-3. Implement structured extraction:
-   - Send retrieved logs to llama.cpp
-   - Prompt engineering for extraction:
-     - Root cause identification
-     - Severity classification
-     - Component detection
-     - Summary generation
-     - Action recommendation
-   - Parse LLM JSON output
+3. ✅ Implement structured extraction:
+   - Streaming endpoint: `POST /v1/analyze/stream`
+   - Sends retrieved logs to llama.cpp (Llama 3.2 3B Instruct)
+   - Prompt engineering for Kubernetes reliability analysis
+   - System prompt: "You are a Kubernetes reliability engineer..."
+   - LLM outputs plain text analysis (not JSON yet - streaming response)
+   - Temperature: 0.3, Max tokens: 200
 
-4. Build evaluation framework:
+4. ✅ Add comprehensive observability:
+   - **OpenTelemetry distributed tracing:**
+     - Custom spans for `analyze_logs_stream`, `query_loki`, `flatten_logs`, `normalize_logs`, `call_llm`
+     - Span attributes: namespace, log_limit, logql.query, llm.model, llm.tokens_generated
+     - Export to Tempo via OTLP (gRPC port 4317)
+     - Solved streaming context challenge by moving all spans inside generator function
+     - FilterSpanProcessor to suppress noisy "http send" spans from streaming
+   - **Structured JSON logging:**
+     - Automatic trace context injection (trace_id, span_id, trace_flags)
+     - Scraped by Grafana Alloy and stored in Loki
+   - **Trace-to-logs correlation:**
+     - Bidirectional: Tempo traces link to Loki logs, Loki logs link to Tempo traces
+     - Verified working in Grafana Explore UI
+
+5. ✅ Deployment automation with justfile:
+   - `just dev` - Local development with port-forwards to K8s services
+   - `just dev-k8s` - Port-forward deployed log-analyzer service
+   - `just test-stream` - Test local service
+   - `just test-k8s` - Test from inside cluster
+   - `just test-k8s-local` - Test via port-forward
+
+### Remaining Work:
+- [ ] Build evaluation framework:
    - Run golden dataset (150 samples) through baseline pipeline
    - Compute metrics:
      - **Extraction accuracy:** Field-level F1 scores (root_cause, severity, component)
@@ -330,17 +361,32 @@ This phase establishes the foundation for evaluation-driven development.
      - **End-to-end latency:** Time from query → result
    - Store results in JSON/CSV for comparison
 
-5. Add basic observability:
-   - OpenTelemetry spans for:
-     - Loki query duration
-     - LLM inference latency
-     - Total request latency
-   - Log extraction results for debugging
+- [ ] Structured JSON extraction (vs current plain text):
+   - Refine prompts to output structured JSON
+   - Parse LLM output into schema:
+     - Root cause identification
+     - Severity classification
+     - Component detection
+     - Summary generation
+     - Action recommendation
+
+- [ ] Expose via Envoy Gateway HTTPRoute (optional for baseline):
+   - Currently accessible via internal ClusterIP service
+   - External access not required for evaluation
 
 **Success Criteria:**
-- Baseline extraction accuracy measured on golden dataset
-- Documented failure modes (what kinds of logs does time-based retrieval miss?)
-- Latency measurements (p50, p95, p99)
+- ✅ Service deployed and generating traces/logs
+- ✅ OpenTelemetry instrumentation complete
+- ✅ Trace-to-logs correlation verified
+- ⏳ Baseline extraction accuracy measured on golden dataset
+- ⏳ Documented failure modes (what kinds of logs does time-based retrieval miss?)
+- ⏳ Latency measurements (p50, p95, p99)
+
+**Key Technical Learnings:**
+- **Streaming context preservation:** Must create all OpenTelemetry spans inside the generator function to maintain context during async streaming. Without this, spans end before streaming starts, breaking parent-child relationships and trace_id propagation.
+- **Token budget management:** Llama 3.2 3B has 4096 token context window. With system prompt + log metadata, sending 50-100 logs easily exceeds this. Solution: reduce default limit to 15 logs, allow user to adjust based on verbosity.
+- **Cross-platform Docker builds:** Apple Silicon Mac builds ARM64 by default. Must use `--platform linux/amd64` for x86_64 K8s nodes.
+- **K3s image loading:** Standard `ctr images import` doesn't work reliably. Copy tar to `/var/lib/rancher/k3s/agent/images/` and restart k3s service instead.
 
 **Rationale:**
 - Establishes ground truth for comparison
@@ -349,10 +395,12 @@ This phase establishes the foundation for evaluation-driven development.
 - Many use cases work fine with time-based retrieval
 
 **Learning Outcomes:**
-- LLM prompt engineering for structured extraction
-- Kubernetes service architecture (FastAPI ↔ Loki ↔ LLM)
-- Evaluation framework design
-- Understanding when simple approaches suffice
+- ✅ LLM prompt engineering for Kubernetes log analysis
+- ✅ Kubernetes service architecture (FastAPI ↔ Loki ↔ LLM)
+- ✅ OpenTelemetry distributed tracing in async/streaming Python applications
+- ✅ Structured logging with trace context propagation
+- ⏳ Evaluation framework design (pending)
+- ⏳ Understanding when simple approaches suffice (requires evaluation)
 
 ---
 

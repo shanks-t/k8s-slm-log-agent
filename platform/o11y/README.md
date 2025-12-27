@@ -1,6 +1,6 @@
-# Logging Infrastructure
+# Observability Infrastructure
 
-This directory contains the logging stack configuration for Phase 2.
+This directory contains the observability stack configuration: logs, traces, and metrics.
 
 ## Architecture
 
@@ -10,16 +10,25 @@ This directory contains the logging stack configuration for Phase 2.
 - 200GB persistent storage
 - 7-day retention policy
 
+**Tempo (on Node 2)**
+- Monolithic deployment mode for distributed tracing
+- Stores traces on Samsung NVMe at `/mnt/k8s-storage/tempo`
+- 50GB persistent storage
+- 7-day (168h) retention policy
+- OTLP receivers on ports 4317 (gRPC) and 4318 (HTTP)
+
 **Grafana Alloy (DaemonSet on both nodes)**
 - Scrapes container logs from both nodes
 - Ships logs to Loki
 - Automatically discovers pods and adds labels
 - Replaces deprecated Promtail (active development, OTel support)
+- Ready for future OTel trace collection if needed
 
 **Grafana (on Node 1)**
-- Web UI for exploring logs
-- Pre-configured Loki datasource
-- Accessible via Envoy Gateway
+- Web UI for exploring logs, traces, and metrics
+- Pre-configured datasources: Loki, Tempo
+- Trace-to-logs correlation enabled (bidirectional)
+- Accessible via Envoy Gateway at http://10.0.0.102/grafana
 
 ## Files Overview
 
@@ -27,6 +36,10 @@ This directory contains the logging stack configuration for Phase 2.
 - **01-loki-storage.yaml** - PersistentVolume + PersistentVolumeClaim for Loki
 - **02-loki-values.yaml** - Helm values for Loki deployment
 - **03-alloy-values.yaml** - Helm values for Grafana Alloy DaemonSet
+- **04-grafana-values.yaml** - Helm values for Grafana with Loki and Tempo datasources
+- **05-grafana-httproute.yaml** - Envoy Gateway HTTPRoute for Grafana access
+- **06-tempo-storage.yaml** - PersistentVolume + PersistentVolumeClaim for Tempo
+- **07-tempo-values.yaml** - Helm values for Tempo deployment
 
 ## Deployment Steps
 
@@ -219,19 +232,117 @@ sudo ufw allow from 10.0.0.102 to any port 8472 proto udp  # On node-2
 sudo ufw enable
 ```
 
+### 9. Deploy Tempo for Distributed Tracing
+
+**Prepare storage directory on Node 2:**
+```bash
+ssh node2 "sudo mkdir -p /mnt/k8s-storage/tempo"
+ssh node2 "sudo chown -R 10001:10001 /mnt/k8s-storage/tempo"
+```
+
+**Create PersistentVolume and PersistentVolumeClaim:**
+```bash
+kubectl apply -f platform/o11y/06-tempo-storage.yaml
+```
+
+**Verify PV and PVC:**
+```bash
+kubectl get pv tempo-pv
+kubectl get pvc -n logging tempo-pvc
+```
+
+**Install Tempo via Helm:**
+```bash
+# Add Grafana Helm repo (if not already added)
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
+
+# Install Tempo
+helm install tempo grafana/tempo \
+  --namespace logging \
+  --values platform/o11y/07-tempo-values.yaml
+```
+
+**Verify Tempo deployment:**
+```bash
+# Check pod is running on Node 2
+kubectl get pods -n logging -o wide | grep tempo
+
+# Check logs for any errors
+kubectl logs -n logging tempo-0 --tail=50
+
+# Test Tempo API
+kubectl port-forward -n logging svc/tempo 3200:3200
+curl http://localhost:3200/ready  # Should return "ready"
+```
+
+**Test trace ingestion:**
+```bash
+# Deploy a service with OpenTelemetry instrumentation (e.g., log-analyzer)
+# Then check for traces in Tempo:
+kubectl port-forward -n logging svc/tempo 3200:3200
+curl http://localhost:3200/api/search?limit=10 | jq .
+```
+
+### 10. Update Grafana with Tempo Datasource
+
+**Update Grafana datasources:**
+```bash
+# Upgrade Grafana with Tempo datasource configuration
+helm upgrade grafana grafana/grafana \
+  --namespace logging \
+  --values platform/o11y/04-grafana-values.yaml \
+  --reuse-values
+```
+
+**Verify in Grafana:**
+1. Navigate to **Configuration** → **Data sources**
+2. Verify **Tempo** datasource is present
+3. Test connection (should show "Data source is working")
+4. Navigate to **Explore** → Select **Tempo**
+5. Search for recent traces
+
+**Test trace-to-logs correlation:**
+1. Generate a trace by calling an instrumented service (e.g., log-analyzer)
+2. In **Explore** → **Tempo**, find the trace
+3. Click on a span and look for **"Logs for this span"** button
+4. Clicking should show correlated logs from Loki with matching trace_id
+
+**Test logs-to-traces correlation:**
+1. In **Explore** → **Loki**, query logs with trace context:
+   ```logql
+   {namespace="log-analyzer"} | json | trace_id != ""
+   ```
+2. Logs should have clickable trace_id links
+3. Clicking should open the trace in Tempo
+
 ## Storage Sizing
 
-**Current allocation:** 200GB out of 476GB Samsung NVMe
+**Current allocation on Samsung NVMe (/mnt/k8s-storage):**
+- Loki: 200GB (PVC)
+- Tempo: 50GB (PVC)
+- **Total allocated:** 250GB out of 476GB
 
 **Estimated capacity:**
-- At 1GB/day ingestion: ~180 days of logs (7-day retention means plenty of headroom)
-- At 10GB/day: ~18 days buffer (still safe with 7-day retention)
+- **Loki** (at 1GB/day ingestion): ~180 days buffer (7-day retention means plenty of headroom)
+- **Tempo** (at 100MB/day trace data): ~450 days buffer (7-day retention is very safe)
 
-**Remaining space:** ~270GB available for Vector DB in Phase 3
+**Remaining space:** ~220GB available for:
+- Vector database in Phase 3B
+- Model storage expansion
+- Future observability needs
 
 ## Next Steps
 
-After Loki is deployed and verified:
-1. Deploy Promtail (will scrape and ship logs to Loki)
-2. Deploy Grafana (will query Loki for log exploration)
-3. Create HTTPRoute to expose Grafana via Envoy Gateway
+Phase 2 is complete! The observability stack is fully deployed:
+- ✅ Loki for log storage
+- ✅ Grafana Alloy for log collection
+- ✅ Grafana for visualization
+- ✅ Tempo for distributed tracing
+- ✅ Trace-to-logs correlation configured
+
+**Proceed to Phase 3A:**
+- Deploy log-analyzer FastAPI service with OpenTelemetry instrumentation
+- Implement baseline time-based retrieval
+- Build evaluation framework with golden dataset
+- Measure extraction accuracy and latency
