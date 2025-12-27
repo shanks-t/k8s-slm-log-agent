@@ -1,0 +1,108 @@
+---
+# HelmRelease for Tempo distributed tracing backend
+# Manages: Trace storage, indexing, and querying
+# Deployed on: Node 2 (heavy hardware)
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: tempo
+  namespace: logging
+spec:
+  interval: 5m  # Check for updates every 5 minutes
+  chart:
+    spec:
+      chart: tempo
+      version: '1.24.1'  # Pin to current version
+      sourceRef:
+        kind: HelmRepository
+        name: grafana
+        namespace: flux-system
+  install:
+    createNamespace: false
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  # Values from inventory/helm-values-tempo.yaml
+  values:
+    # Single replica (sufficient for homelab)
+    replicas: 1
+
+    # Node placement: Run on Node 2 (heavy hardware)
+    nodeSelector:
+      hardware: heavy
+
+    # Tolerate Node 2 taint
+    tolerations:
+      - key: heavy
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+
+    # Persistent storage (uses existing PVC created separately)
+    persistence:
+      enabled: true
+      accessModes:
+        - ReadWriteOnce
+      size: 50Gi
+      existingClaim: tempo-pvc  # References PVC in infrastructure/storage/
+
+    # Service configuration
+    service:
+      type: ClusterIP
+
+    # Disable gateway and ingress
+    gateway:
+      enabled: false
+    ingress:
+      enabled: false
+
+    # Disable service monitor (no Prometheus in cluster)
+    serviceMonitor:
+      enabled: false
+
+    # Tempo configuration
+    tempo:
+      # Repository and pull policy
+      repository: grafana/tempo
+      tag: ""  # Use chart's app version
+      pullPolicy: IfNotPresent
+
+      # Multi-tenancy disabled
+      multitenancyEnabled: false
+
+      # Server configuration
+      server:
+        http_listen_port: 3200
+
+      # Storage backend: local filesystem
+      storage:
+        trace:
+          backend: local
+          local:
+            path: /var/tempo/traces
+          wal:
+            path: /var/tempo/wal
+          block:
+            version: vParquet4  # Parquet format for efficiency
+
+      # Retention: 7 days
+      retention: 168h
+
+      # Metrics generator disabled (no Prometheus)
+      metricsGenerator:
+        enabled: false
+
+      # Overrides configuration
+      overrides:
+        per_tenant_override_config: /conf/overrides.yaml
+
+      # Resource limits
+      resources:
+        requests:
+          cpu: 500m      # 0.5 CPU cores
+          memory: 512Mi  # 512MB RAM
+        limits:
+          cpu: 2         # 2 CPU cores max
+          memory: 2Gi    # 2GB RAM max

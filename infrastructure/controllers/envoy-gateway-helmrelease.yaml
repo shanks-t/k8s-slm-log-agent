@@ -1,0 +1,32 @@
+---
+# HelmRelease for Envoy Gateway ingress controller
+# Manages: API Gateway, HTTPRoutes, and ingress traffic
+# Deployed on: Default (no node selector, runs on Node 1)
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: eg
+  namespace: envoy-gateway-system
+spec:
+  interval: 5m  # Check for updates every 5 minutes
+  chart:
+    spec:
+      chart: gateway-helm
+      version: 'v1.4.6'  # Pin to current version
+      sourceRef:
+        kind: HelmRepository
+        name: envoyproxy
+        namespace: flux-system
+  install:
+    createNamespace: false
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  # No custom values (inventory/helm-values-envoy-gateway.yaml was null)
+  # Using chart defaults, which deploy:
+  # - Envoy Gateway controller
+  # - GatewayClass CRD
+  # - Gateway and HTTPRoute support
+  values: {}

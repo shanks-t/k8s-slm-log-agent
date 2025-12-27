@@ -1,0 +1,124 @@
+---
+# HelmRelease for Loki log aggregation system
+# Manages: Log storage, indexing, and querying
+# Deployed on: Node 2 (heavy hardware)
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: loki
+  namespace: logging
+spec:
+  interval: 5m  # Check for updates every 5 minutes
+  chart:
+    spec:
+      chart: loki
+      version: '6.21.0'  # Pin to current version (prevent auto-updates)
+      sourceRef:
+        kind: HelmRepository
+        name: grafana
+        namespace: flux-system
+  install:
+    createNamespace: false  # Namespace created separately
+    remediation:
+      retries: 3  # Retry failed installs up to 3 times
+  upgrade:
+    remediation:
+      retries: 3  # Retry failed upgrades up to 3 times
+  # Values from inventory/helm-values-loki.yaml
+  values:
+    # Deployment mode: single binary for simplicity
+    deploymentMode: SingleBinary
+
+    # Disable distributed components (not needed for homelab)
+    backend:
+      replicas: 0
+    read:
+      replicas: 0
+    write:
+      replicas: 0
+    gateway:
+      enabled: false
+
+    # Loki configuration
+    loki:
+      auth_enabled: false  # No multi-tenancy
+      commonConfig:
+        replication_factor: 1  # Single replica
+
+      # Storage configuration
+      storage:
+        type: filesystem  # Local storage (not S3/GCS)
+
+      schemaConfig:
+        configs:
+          - from: "2024-01-01"
+            store: tsdb
+            object_store: filesystem
+            schema: v13
+            index:
+              prefix: index_
+              period: 24h
+
+      # Limits and retention
+      limits_config:
+        ingestion_rate_mb: 50          # Max ingestion rate per stream
+        ingestion_burst_size_mb: 100   # Burst allowance
+        retention_period: 168h         # 7 days retention
+        max_query_length: 721h         # Max query time range (30 days)
+
+      # Memberlist (not used in single binary mode)
+      memberlist:
+        join_members: []
+
+    # Single binary pod configuration
+    singleBinary:
+      replicas: 1
+
+      # Node placement: Run on Node 2 (heavy hardware)
+      nodeSelector:
+        hardware: heavy
+
+      # Tolerate Node 2 taint
+      tolerations:
+        - key: heavy
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+
+      # Persistent storage (uses PV created in infrastructure/storage/)
+      persistence:
+        enabled: true
+        size: 200Gi
+        storageClass: local-storage
+        selector:
+          matchLabels:
+            app: loki
+            type: local
+
+      # Resource limits
+      resources:
+        requests:
+          cpu: 500m      # 0.5 CPU cores
+          memory: 1Gi    # 1GB RAM
+        limits:
+          cpu: 2         # 2 CPU cores max
+          memory: 4Gi    # 4GB RAM max
+
+    # Disable caching (not needed for single binary)
+    chunksCache:
+      enabled: false
+    resultsCache:
+      enabled: false
+
+    # Disable monitoring components
+    lokiCanary:
+      enabled: false
+    monitoring:
+      selfMonitoring:
+        enabled: false
+        grafanaAgent:
+          installOperator: false
+
+    # Disable tests
+    test:
+      enabled: false
