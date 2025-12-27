@@ -10,10 +10,19 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from log_analyzer.models.requests import AnalyzeRequest
+from log_analyzer.observability import setup_telemetry, get_tracer
+from log_analyzer.observability.logging import setup_logging, get_logger
 
 LOKI_URL = "http://localhost:3100"
 LLAMA_URL = "http://localhost:8080"
 MODEL_NAME = "llama-3.2-3b-instruct"
+
+# Initialize structured logging with trace context
+setup_logging(level="INFO")
+logger = get_logger(__name__)
+
+# Get tracer for manual span creation
+tracer = get_tracer(__name__)
 
 
 @asynccontextmanager
@@ -33,6 +42,9 @@ app = FastAPI(
     version="0.1.0",
     lifespan=check_dependencies,
 )
+
+# Initialize OpenTelemetry tracing
+setup_telemetry(app, service_name="log-analyzer", service_version="0.1.0")
 
 
 @app.get("/")
@@ -233,6 +245,12 @@ def build_text_header(normalized_logs, time_range):
 
 
 async def stream_llm(prompt: str):
+    # TODO(human): Add a custom span here to trace the LLM call
+    # Use: with tracer.start_as_current_span("call_llm") as llm_span:
+    # Add attributes: llm.model, llm.max_tokens, llm.temperature, llm.streaming
+    # Add logging: logger.info("Calling LLM", ...) before the call
+    # Add logging: logger.info("LLM streaming complete") after the loop
+
     timeout = httpx.Timeout(
         connect=5.0,
         write=5.0,
@@ -280,56 +298,93 @@ async def stream_llm(prompt: str):
 
 @app.post("/v1/analyze/stream")
 async def analyze_logs_stream(request: AnalyzeRequest):
-    query = build_logql_query(request.filters)
+    # Create a span for the entire operation
+    with tracer.start_as_current_span("analyze_logs_stream") as span:
+        # Add request attributes to span for debugging
+        span.set_attribute("namespace", request.filters.namespace or "all")
+        span.set_attribute("log_limit", request.limit)
+        span.set_attribute("time_range_hours",
+            (request.time_range.end - request.time_range.start).total_seconds() / 3600)
 
-    params = {
-        "query": query,
-        "limit": request.limit,
-        "start": int(request.time_range.start.timestamp() * 1e9),
-        "end": int(request.time_range.end.timestamp() * 1e9),
-        "direction": "backward",
-    }
+        logger.info("Starting log analysis", extra={
+            "extra_fields": {
+                "namespace": request.filters.namespace,
+                "limit": request.limit
+            }
+        })
 
-    # --- Query Loki ---
-    async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.get(
-            f"{LOKI_URL}/loki/api/v1/query_range",
-            params=params,
-        )
-        resp.raise_for_status()
-        data = resp.json()
+        query = build_logql_query(request.filters)
 
-    results = data.get("data", {}).get("result", [])
-    if not results:
-        return JSONResponse(
-            status_code=404,
-            content={"error": "No logs found"},
-        )
+        params = {
+            "query": query,
+            "limit": request.limit,
+            "start": int(request.time_range.start.timestamp() * 1e9),
+            "end": int(request.time_range.end.timestamp() * 1e9),
+            "direction": "backward",
+        }
 
-    # --- Flatten logs ---
-    logs = []
-    for result in results:
-        labels = result["stream"]
-        for ts_ns, line in result["values"]:
-            logs.append(
-                {
-                    "timestamp": datetime.fromtimestamp(int(ts_ns) / 1e9, UTC).isoformat().replace("+00:00", "Z"),
-                    "message": line.strip(),
-                    "labels": labels,
-                }
+        # --- Query Loki ---
+        with tracer.start_as_current_span("query_loki") as loki_span:
+            loki_span.set_attribute("logql.query", query)
+            loki_span.set_attribute("logql.limit", request.limit)
+
+            logger.info("Querying Loki", extra={
+                "extra_fields": {"query": query}
+            })
+
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    f"{LOKI_URL}/loki/api/v1/query_range",
+                    params=params,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+
+            results = data.get("data", {}).get("result", [])
+            loki_span.set_attribute("loki.results_count", len(results))
+
+            logger.info("Loki query complete", extra={
+                "extra_fields": {"results_count": len(results)}
+            })
+
+        if not results:
+            logger.warning("No logs found in Loki")
+            return JSONResponse(
+                status_code=404,
+                content={"error": "No logs found"},
             )
 
-    if not logs:
-        return JSONResponse(
-            status_code=404,
-            content={"error": "No logs found"},
-        )
+        # --- Flatten logs ---
+        with tracer.start_as_current_span("flatten_logs") as flatten_span:
+            logs = []
+            for result in results:
+                labels = result["stream"]
+                for ts_ns, line in result["values"]:
+                    logs.append(
+                        {
+                            "timestamp": datetime.fromtimestamp(int(ts_ns) / 1e9, UTC).isoformat().replace("+00:00", "Z"),
+                            "message": line.strip(),
+                            "labels": labels,
+                        }
+                    )
 
-    # --- Normalize ---
-    normalized = [normalize_log(l) for l in logs]
+            flatten_span.set_attribute("logs.flattened_count", len(logs))
 
-    # --- Prompt ---
-    prompt = build_llm_prompt(normalized, request.time_range)
+        if not logs:
+            return JSONResponse(
+                status_code=404,
+                content={"error": "No logs found"},
+            )
+
+        # --- Normalize ---
+        with tracer.start_as_current_span("normalize_logs"):
+            normalized = [normalize_log(l) for l in logs]
+            logger.info("Logs normalized", extra={
+                "extra_fields": {"log_count": len(normalized)}
+            })
+
+        # --- Prompt ---
+        prompt = build_llm_prompt(normalized, request.time_range)
 
     header = build_text_header(normalized, request.time_range)
 
