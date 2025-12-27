@@ -16,8 +16,8 @@ persistence:
   # size: 10Gi
   # storageClassName: local-storage
 
-# Pre-configure Loki as a datasource
-# This automatically adds Loki when Grafana starts
+# Pre-configure Loki and Tempo as datasources
+# This automatically adds both when Grafana starts
 datasources:
   datasources.yaml:
     apiVersion: 1
@@ -32,7 +32,41 @@ datasources:
         jsonData:
           # Max lines to fetch from Loki
           maxLines: 1000
+          # Enable derived fields for trace correlation
+          derivedFields:
+            - datasourceUid: tempo
+              matcherRegex: "trace_id=(\\w+)"
+              name: TraceID
+              url: "$${__value.raw}"
         # No authentication needed for internal cluster communication
+        editable: true
+
+      - name: Tempo
+        type: tempo
+        access: proxy
+        # Tempo service URL (internal Kubernetes DNS)
+        url: http://tempo.logging.svc.cluster.local:3200
+        jsonData:
+          # Enable trace to logs correlation
+          tracesToLogs:
+            datasourceUid: loki
+            tags: ['job', 'instance', 'pod', 'namespace']
+            mappedTags: [{ key: 'service.name', value: 'service' }]
+            mapTagNamesEnabled: false
+            spanStartTimeShift: '1h'
+            spanEndTimeShift: '1h'
+            filterByTraceID: false
+            filterBySpanID: false
+          # Enable service graph
+          serviceMap:
+            datasourceUid: 'prometheus'  # We'll add Prometheus later
+          nodeGraph:
+            enabled: true
+          search:
+            hide: false
+          lokiSearch:
+            datasourceUid: loki
+        uid: tempo
         editable: true
 
 # Service configuration
