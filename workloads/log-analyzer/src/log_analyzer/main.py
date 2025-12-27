@@ -245,158 +245,179 @@ def build_text_header(normalized_logs, time_range):
 
 
 async def stream_llm(prompt: str):
-    # TODO(human): Add a custom span here to trace the LLM call
-    # Use: with tracer.start_as_current_span("call_llm") as llm_span:
-    # Add attributes: llm.model, llm.max_tokens, llm.temperature, llm.streaming
-    # Add logging: logger.info("Calling LLM", ...) before the call
-    # Add logging: logger.info("LLM streaming complete") after the loop
+    # Create a span to trace the LLM streaming call
+    with tracer.start_as_current_span("call_llm") as llm_span:
+        # Add LLM-specific attributes for debugging
+        llm_span.set_attribute("llm.model", MODEL_NAME)
+        llm_span.set_attribute("llm.max_tokens", 200)
+        llm_span.set_attribute("llm.temperature", 0.3)
+        llm_span.set_attribute("llm.streaming", True)
+        llm_span.set_attribute("llm.provider", "llama-cpp")
 
-    timeout = httpx.Timeout(
-        connect=5.0,
-        write=5.0,
-        pool=5.0,
-        read=None,  # IMPORTANT: disable read timeout for streaming
-    )
-
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        async with client.stream(
-            "POST",
-            f"{LLAMA_URL}/v1/chat/completions",
-            json={
+        logger.info("Calling LLM for analysis", extra={
+            "extra_fields": {
                 "model": MODEL_NAME,
-                "stream": True,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are a Kubernetes reliability engineer.\n"
-                            "Analyze logs and identify whether action is required.\n"
-                            "If logs are informational, clearly say so.\n"
-                            "Write plain text, not Markdown."
-                        ),
-                    },
-                    {"role": "user", "content": prompt},
-                ],
                 "max_tokens": 200,
-                "temperature": 0.3,
-            },
-        ) as resp:
-            async for line in resp.aiter_lines():
-                if not line.startswith("data:"):
-                    continue
+                "temperature": 0.3
+            }
+        })
 
-                data = line.removeprefix("data: ").strip()
-                if data == "[DONE]":
-                    break
+        timeout = httpx.Timeout(
+            connect=5.0,
+            write=5.0,
+            pool=5.0,
+            read=None,  # IMPORTANT: disable read timeout for streaming
+        )
 
-                payload = json.loads(data)
-                delta = payload["choices"][0].get("delta", {})
-                content = delta.get("content")
-                if content:
-                    yield content
+        tokens_generated = 0
+
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            async with client.stream(
+                "POST",
+                f"{LLAMA_URL}/v1/chat/completions",
+                json={
+                    "model": MODEL_NAME,
+                    "stream": True,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": (
+                                "You are a Kubernetes reliability engineer.\n"
+                                "Analyze logs and identify whether action is required.\n"
+                                "If logs are informational, clearly say so.\n"
+                                "Write plain text, not Markdown."
+                            ),
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    "max_tokens": 200,
+                    "temperature": 0.3,
+                },
+            ) as resp:
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+
+                    data = line.removeprefix("data: ").strip()
+                    if data == "[DONE]":
+                        break
+
+                    payload = json.loads(data)
+                    delta = payload["choices"][0].get("delta", {})
+                    content = delta.get("content")
+                    if content:
+                        tokens_generated += 1
+                        yield content
+
+        # Record total tokens generated
+        llm_span.set_attribute("llm.tokens_generated", tokens_generated)
+
+        logger.info("LLM streaming complete", extra={
+            "extra_fields": {"tokens_generated": tokens_generated}
+        })
 
 
 @app.post("/v1/analyze/stream")
 async def analyze_logs_stream(request: AnalyzeRequest):
-    # Create a span for the entire operation
-    with tracer.start_as_current_span("analyze_logs_stream") as span:
-        # Add request attributes to span for debugging
-        span.set_attribute("namespace", request.filters.namespace or "all")
-        span.set_attribute("log_limit", request.limit)
-        span.set_attribute("time_range_hours",
-            (request.time_range.end - request.time_range.start).total_seconds() / 3600)
-
-        logger.info("Starting log analysis", extra={
-            "extra_fields": {
-                "namespace": request.filters.namespace,
-                "limit": request.limit
-            }
-        })
-
-        query = build_logql_query(request.filters)
-
-        params = {
-            "query": query,
-            "limit": request.limit,
-            "start": int(request.time_range.start.timestamp() * 1e9),
-            "end": int(request.time_range.end.timestamp() * 1e9),
-            "direction": "backward",
-        }
-
-        # --- Query Loki ---
-        with tracer.start_as_current_span("query_loki") as loki_span:
-            loki_span.set_attribute("logql.query", query)
-            loki_span.set_attribute("logql.limit", request.limit)
-
-            logger.info("Querying Loki", extra={
-                "extra_fields": {"query": query}
-            })
-
-            async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.get(
-                    f"{LOKI_URL}/loki/api/v1/query_range",
-                    params=params,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-
-            results = data.get("data", {}).get("result", [])
-            loki_span.set_attribute("loki.results_count", len(results))
-
-            logger.info("Loki query complete", extra={
-                "extra_fields": {"results_count": len(results)}
-            })
-
-        if not results:
-            logger.warning("No logs found in Loki")
-            return JSONResponse(
-                status_code=404,
-                content={"error": "No logs found"},
-            )
-
-        # --- Flatten logs ---
-        with tracer.start_as_current_span("flatten_logs") as flatten_span:
-            logs = []
-            for result in results:
-                labels = result["stream"]
-                for ts_ns, line in result["values"]:
-                    logs.append(
-                        {
-                            "timestamp": datetime.fromtimestamp(int(ts_ns) / 1e9, UTC).isoformat().replace("+00:00", "Z"),
-                            "message": line.strip(),
-                            "labels": labels,
-                        }
-                    )
-
-            flatten_span.set_attribute("logs.flattened_count", len(logs))
-
-        if not logs:
-            return JSONResponse(
-                status_code=404,
-                content={"error": "No logs found"},
-            )
-
-        # --- Normalize ---
-        with tracer.start_as_current_span("normalize_logs"):
-            normalized = [normalize_log(l) for l in logs]
-            logger.info("Logs normalized", extra={
-                "extra_fields": {"log_count": len(normalized)}
-            })
-
-        # --- Prompt ---
-        prompt = build_llm_prompt(normalized, request.time_range)
-
-    header = build_text_header(normalized, request.time_range)
-
     async def event_stream():
-        # Send header immediately
-        yield header + "\n"
+        # IMPORTANT: All work must happen inside this generator
+        # to keep the span context alive during streaming
 
-        # Stream model output
-        async for chunk in stream_llm(prompt):
-            yield chunk
+        with tracer.start_as_current_span("analyze_logs_stream") as span:
+            # Add request attributes to span for debugging
+            span.set_attribute("namespace", request.filters.namespace or "all")
+            span.set_attribute("log_limit", request.limit)
+            span.set_attribute("time_range_hours",
+                (request.time_range.end - request.time_range.start).total_seconds() / 3600)
 
-        yield "\n\n=== End of Analysis ===\n"
+            logger.info("Starting log analysis", extra={
+                "extra_fields": {
+                    "namespace": request.filters.namespace,
+                    "limit": request.limit
+                }
+            })
+
+            query = build_logql_query(request.filters)
+
+            params = {
+                "query": query,
+                "limit": request.limit,
+                "start": int(request.time_range.start.timestamp() * 1e9),
+                "end": int(request.time_range.end.timestamp() * 1e9),
+                "direction": "backward",
+            }
+
+            # --- Query Loki ---
+            with tracer.start_as_current_span("query_loki") as loki_span:
+                loki_span.set_attribute("logql.query", query)
+                loki_span.set_attribute("logql.limit", request.limit)
+
+                logger.info("Querying Loki", extra={
+                    "extra_fields": {"query": query}
+                })
+
+                async with httpx.AsyncClient(timeout=10) as client:
+                    resp = await client.get(
+                        f"{LOKI_URL}/loki/api/v1/query_range",
+                        params=params,
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+
+                results = data.get("data", {}).get("result", [])
+                loki_span.set_attribute("loki.results_count", len(results))
+
+                logger.info("Loki query complete", extra={
+                    "extra_fields": {"results_count": len(results)}
+                })
+
+            if not results:
+                logger.warning("No logs found in Loki")
+                yield '{"error": "No logs found"}\n'
+                return
+
+            # --- Flatten logs ---
+            with tracer.start_as_current_span("flatten_logs") as flatten_span:
+                logs = []
+                for result in results:
+                    labels = result["stream"]
+                    for ts_ns, line in result["values"]:
+                        logs.append(
+                            {
+                                "timestamp": datetime.fromtimestamp(int(ts_ns) / 1e9, UTC).isoformat().replace("+00:00", "Z"),
+                                "message": line.strip(),
+                                "labels": labels,
+                            }
+                        )
+
+                flatten_span.set_attribute("logs.flattened_count", len(logs))
+
+            if not logs:
+                yield '{"error": "No logs found"}\n'
+                return
+
+            # --- Normalize ---
+            with tracer.start_as_current_span("normalize_logs"):
+                normalized = [normalize_log(l) for l in logs]
+                logger.info("Logs normalized", extra={
+                    "extra_fields": {"log_count": len(normalized)}
+                })
+
+            # --- Build prompt and header ---
+            prompt = build_llm_prompt(normalized, request.time_range)
+            header = build_text_header(normalized, request.time_range)
+
+            # Send header immediately
+            yield header + "\n"
+
+            # --- Stream LLM output ---
+            # The stream_llm spans will be children of analyze_logs_stream
+            async for chunk in stream_llm(prompt):
+                yield chunk
+
+            yield "\n\n=== End of Analysis ===\n"
+
+            logger.info("Log analysis complete")
 
     return StreamingResponse(
         event_stream(),

@@ -1,0 +1,9 @@
+---
+# Namespace for log-analyzer service
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: log-analyzer
+  labels:
+    app: log-analyzer
+    purpose: observability
