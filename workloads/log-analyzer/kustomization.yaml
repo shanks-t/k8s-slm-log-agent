@@ -1,0 +1,11 @@
+---
+# Kustomization for log analyzer workload
+# FastAPI service running on Node 1 (light hardware)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: log-analyzer
+resources:
+  - namespace.yaml       # log-analyzer namespace
+  - configmap.yaml       # Environment configuration
+  - deployment.yaml      # FastAPI Deployment
+  - service.yaml         # ClusterIP service

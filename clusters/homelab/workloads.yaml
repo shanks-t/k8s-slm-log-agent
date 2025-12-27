@@ -1,0 +1,31 @@
+---
+# Flux Kustomization for workloads
+# This is the entry point for all application-level resources
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: workloads
+  namespace: flux-system
+spec:
+  interval: 5m           # Check Git every 5 minutes (more frequent than infra)
+  retryInterval: 1m      # Retry failures after 1 minute
+  timeout: 5m            # Max time for apply operations
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./workloads      # Path in Git repository
+  prune: true            # Delete resources removed from Git
+  wait: true             # Wait for resources to be ready
+  # Workloads depend on infrastructure being ready
+  dependsOn:
+    - name: infrastructure
+  # Health checks for critical workloads
+  healthChecks:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: llama-cpp
+      namespace: llm
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: log-analyzer
+      namespace: log-analyzer

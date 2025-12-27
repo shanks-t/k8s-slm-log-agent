@@ -1,0 +1,10 @@
+---
+# Root kustomization for infrastructure resources
+# This file aggregates all platform-level components
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - sources/        # HelmRepositories (must be first)
+  - storage/        # PersistentVolumes (must be before workloads)
+  - controllers/    # Envoy Gateway
+  - logging/        # Loki, Grafana, Tempo, Alloy

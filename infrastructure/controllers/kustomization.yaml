@@ -1,0 +1,8 @@
+---
+# Kustomization for cluster controllers
+# Envoy Gateway provides ingress/gateway functionality
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml           # envoy-gateway-system namespace
+  # HelmRelease will be added in Step 5

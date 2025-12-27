@@ -1,0 +1,8 @@
+---
+# Kustomization for observability stack
+# Includes logging, metrics, and distributed tracing
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml              # logging namespace
+  # HelmReleases will be added in Step 5

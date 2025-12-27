@@ -58,7 +58,11 @@
       "Bash(just test-k8s:*)",
       "WebFetch(domain:docs.tilt.dev)",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:fluxcd.io)"
+      "WebFetch(domain:fluxcd.io)",
+      "Bash(git commit:*)",
+      "Bash(paste:*)",
+      "Bash(kustomize build:*)",
+      "Bash(kubectl kustomize:*)"
     ],
     "deny": [],
     "ask": []

@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llama-cpp
+  namespace: llm
+  labels:
+    app: llama-cpp
+    component: llm-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: llama-cpp
+  template:
+    metadata:
+      labels:
+        app: llama-cpp
+        component: llm-server
+    spec:
+      # Ensure pod runs only on Node 2
+      nodeSelector:
+        hardware: heavy
+
+      # Tolerate the Node 2 taint
+      tolerations:
+        - key: heavy
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+
+      containers:
+        - name: llama-server
+          image: ghcr.io/ggml-org/llama.cpp:server
+          imagePullPolicy: Always
+
+          args:
+            - "--model"
+            - "/models/llama-3.2-3b-instruct-q4_k_m.gguf"
+            - "--alias"
+            - "llama-3.2-3b-instruct"
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "8080"
+            - "--ctx-size"
+            - "4096"
+            - "--threads"
+            - "14"  # Conservative from our 16-thread benchmark
+            - "--parallel"
+            - "2"   # Allow 2 concurrent requests
+            - "--n-gpu-layers"
+            - "0"   # CPU-only
+            - "--metrics"  # Enable Prometheus metrics
+
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+
+          # Resource limits based on benchmarks
+          resources:
+            requests:
+              cpu: "6000m"      # 10 cores minimum
+              memory: "6Gi"     # 6GB minimum (model + overhead)
+            limits:
+              cpu: "12000m"     # Allow burst to 14 cores
+              memory: "10Gi"     # 10GB max
+
+          # Health checks
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 60  # Model loading takes time
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          # Mount the models volume
+          volumeMounts:
+            - name: models
+              mountPath: /models
+              readOnly: true
+
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: llama-models-pvc
