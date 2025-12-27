@@ -87,6 +87,7 @@ def build_logql_query(filters) -> str:
     if filters.log_filter:
         query += f' |~ "{filters.log_filter}"'
     else:
+        # TODO: need to review how logs are classified to make sure i am not filtering out important logs
         # Default: only get errors and warnings
         query += ' |~ "(?i)(error|warn|failed|exception|panic|fatal)"'
 
@@ -195,7 +196,9 @@ async def analyze_logs(request: AnalyzeRequest):
         for ts_ns, line in result["values"]:
             logs.append(
                 {
-                    "timestamp": datetime.fromtimestamp(int(ts_ns) / 1e9, UTC).isoformat().replace("+00:00", "Z"),
+                    "timestamp": datetime.fromtimestamp(int(ts_ns) / 1e9, UTC)
+                    .isoformat()
+                    .replace("+00:00", "Z"),
                     "message": line.strip(),
                     "labels": labels,
                 }
@@ -256,13 +259,16 @@ async def stream_llm(prompt: str):
         llm_span.set_attribute("llm.streaming", True)
         llm_span.set_attribute("llm.provider", "llama-cpp")
 
-        logger.info("Calling LLM for analysis", extra={
-            "extra_fields": {
-                "model": MODEL_NAME,
-                "max_tokens": 200,
-                "temperature": 0.3
-            }
-        })
+        logger.info(
+            "Calling LLM for analysis",
+            extra={
+                "extra_fields": {
+                    "model": MODEL_NAME,
+                    "max_tokens": 200,
+                    "temperature": 0.3,
+                }
+            },
+        )
 
         timeout = httpx.Timeout(
             connect=5.0,
@@ -314,9 +320,10 @@ async def stream_llm(prompt: str):
         # Record total tokens generated
         llm_span.set_attribute("llm.tokens_generated", tokens_generated)
 
-        logger.info("LLM streaming complete", extra={
-            "extra_fields": {"tokens_generated": tokens_generated}
-        })
+        logger.info(
+            "LLM streaming complete",
+            extra={"extra_fields": {"tokens_generated": tokens_generated}},
+        )
 
 
 @app.post("/v1/analyze/stream")
@@ -329,15 +336,21 @@ async def analyze_logs_stream(request: AnalyzeRequest):
             # Add request attributes to span for debugging
             span.set_attribute("namespace", request.filters.namespace or "all")
             span.set_attribute("log_limit", request.limit)
-            span.set_attribute("time_range_hours",
-                (request.time_range.end - request.time_range.start).total_seconds() / 3600)
+            span.set_attribute(
+                "time_range_hours",
+                (request.time_range.end - request.time_range.start).total_seconds()
+                / 3600,
+            )
 
-            logger.info("Starting log analysis", extra={
-                "extra_fields": {
-                    "namespace": request.filters.namespace,
-                    "limit": request.limit
-                }
-            })
+            logger.info(
+                "Starting log analysis",
+                extra={
+                    "extra_fields": {
+                        "namespace": request.filters.namespace,
+                        "limit": request.limit,
+                    }
+                },
+            )
 
             query = build_logql_query(request.filters)
 
@@ -354,9 +367,7 @@ async def analyze_logs_stream(request: AnalyzeRequest):
                 loki_span.set_attribute("logql.query", query)
                 loki_span.set_attribute("logql.limit", request.limit)
 
-                logger.info("Querying Loki", extra={
-                    "extra_fields": {"query": query}
-                })
+                logger.info("Querying Loki", extra={"extra_fields": {"query": query}})
 
                 async with httpx.AsyncClient(timeout=10) as client:
                     resp = await client.get(
@@ -369,9 +380,10 @@ async def analyze_logs_stream(request: AnalyzeRequest):
                 results = data.get("data", {}).get("result", [])
                 loki_span.set_attribute("loki.results_count", len(results))
 
-                logger.info("Loki query complete", extra={
-                    "extra_fields": {"results_count": len(results)}
-                })
+                logger.info(
+                    "Loki query complete",
+                    extra={"extra_fields": {"results_count": len(results)}},
+                )
 
             if not results:
                 logger.warning("No logs found in Loki")
@@ -386,7 +398,11 @@ async def analyze_logs_stream(request: AnalyzeRequest):
                     for ts_ns, line in result["values"]:
                         logs.append(
                             {
-                                "timestamp": datetime.fromtimestamp(int(ts_ns) / 1e9, UTC).isoformat().replace("+00:00", "Z"),
+                                "timestamp": datetime.fromtimestamp(
+                                    int(ts_ns) / 1e9, UTC
+                                )
+                                .isoformat()
+                                .replace("+00:00", "Z"),
                                 "message": line.strip(),
                                 "labels": labels,
                             }
@@ -401,9 +417,10 @@ async def analyze_logs_stream(request: AnalyzeRequest):
             # --- Normalize ---
             with tracer.start_as_current_span("normalize_logs"):
                 normalized = [normalize_log(l) for l in logs]
-                logger.info("Logs normalized", extra={
-                    "extra_fields": {"log_count": len(normalized)}
-                })
+                logger.info(
+                    "Logs normalized",
+                    extra={"extra_fields": {"log_count": len(normalized)}},
+                )
 
             # --- Build prompt and header ---
             prompt = build_llm_prompt(normalized, request.time_range)
