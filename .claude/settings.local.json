@@ -55,7 +55,10 @@
       "Bash(docker save:*)",
       "Bash(just dev-k8s:*)",
       "Bash(just test-k8s-local:*)",
-      "Bash(just test-k8s:*)"
+      "Bash(just test-k8s:*)",
+      "WebFetch(domain:docs.tilt.dev)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:fluxcd.io)"
     ],
     "deny": [],
     "ask": []

@@ -14,6 +14,29 @@ This project implements a production-inspired observability pipeline that ingest
 - OpenTelemetry instrumentation
 - Evaluation framework with golden dataset
 
+
+## Using git work trees for multi-agent workflows
+
+Call giit worktree add -b <new-wt-branch> <path-to-working-dr> (must be outside of current .git repo) <branch-to-create-worktree-from>. e.g.
+```sh
+git worktree add -b agent/flux ../a-k8s-slm-log-agent-wt main
+```
+List worktrees:
+```sh
+git worktree list
+```
+e.g. I created a worktree to migrate my project to flux while continuing development on the agent Fastapi service
+```sh
+git worktree list
+/Users/treyshanks/workspace/k8s-slm-log-agent       de51178 [main]
+/Users/treyshanks/workspace/k8s-slm-log-agent-wt-a  de51178 [agent/flux]
+```
+Then cd into worktree and give your agent instructions! e.g.
+```sh
+cd ../../k8s-slm-log-agent-wt-a
+git status
+```
+
 ## Local Development
 
 This project uses `just` for local development workflows. All commands should be run from the repository root.
