@@ -2,6 +2,7 @@
 
 from contextlib import asynccontextmanager
 import json
+import os
 import httpx
 from datetime import datetime, UTC
 
@@ -13,9 +14,10 @@ from log_analyzer.models.requests import AnalyzeRequest
 from log_analyzer.observability import setup_telemetry, get_tracer
 from log_analyzer.observability.logging import setup_logging, get_logger
 
-LOKI_URL = "http://localhost:3100"
-LLAMA_URL = "http://localhost:8080"
-MODEL_NAME = "llama-3.2-3b-instruct"
+# Read from environment variables (set by k8s ConfigMap or default to localhost for local dev)
+LOKI_URL = os.getenv("LOKI_URL", "http://localhost:3100")
+LLAMA_URL = os.getenv("LLAMA_URL", "http://localhost:8080")
+MODEL_NAME = os.getenv("MODEL_NAME", "llama-3.2-3b-instruct")
 
 # Initialize structured logging with trace context
 setup_logging(level="INFO")

@@ -29,7 +29,7 @@ class AnalyzeRequest(BaseModel):
 
     time_range: TimeRange = Field(..., description="Time range for log query")
     filters: LogFilters = Field(default_factory=LogFilters, description="Optional filters")
-    limit: int = Field(50, ge=1, le=200, description="Maximum number of logs to retrieve")
+    limit: int = Field(15, ge=1, le=200, description="Maximum number of logs to retrieve")
 
 
 class EvaluateRequest(BaseModel):

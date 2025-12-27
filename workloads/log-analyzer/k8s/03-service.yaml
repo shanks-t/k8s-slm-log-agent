@@ -1,0 +1,18 @@
+---
+# Service for log-analyzer
+apiVersion: v1
+kind: Service
+metadata:
+  name: log-analyzer
+  namespace: log-analyzer
+  labels:
+    app: log-analyzer
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+    protocol: TCP
+  selector:
+    app: log-analyzer

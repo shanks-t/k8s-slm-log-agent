@@ -7,6 +7,7 @@ RUN pip install --no-cache-dir uv
 
 # Copy service files
 COPY pyproject.toml .
+COPY README.md .
 COPY src/ src/
 
 # Install dependencies
