@@ -58,7 +58,13 @@
       "Bash(just test-k8s:*)",
       "WebFetch(domain:docs.tilt.dev)",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:fluxcd.io)"
+      "WebFetch(domain:fluxcd.io)",
+      "Bash(pkill:*)",
+      "Bash(kubectl rollout:*)",
+      "Bash(/tmp/check_loki_llm.sh)",
+      "Bash(just _calc_time_range:*)",
+      "Bash(just:*)",
+      "Bash(tee:*)"
     ],
     "deny": [],
     "ask": []
