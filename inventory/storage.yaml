@@ -1,0 +1,323 @@
+apiVersion: v1
+items:
+- apiVersion: v1
+  kind: PersistentVolume
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"v1","kind":"PersistentVolume","metadata":{"annotations":{},"labels":{"app":"llama-cpp","type":"local"},"name":"llama-models-pv"},"spec":{"accessModes":["ReadOnlyMany"],"capacity":{"storage":"20Gi"},"local":{"path":"/mnt/k8s-storage/models"},"nodeAffinity":{"required":{"nodeSelectorTerms":[{"matchExpressions":[{"key":"kubernetes.io/hostname","operator":"In","values":["node-2"]}]}]}},"persistentVolumeReclaimPolicy":"Retain","storageClassName":"local-storage"}}
+      pv.kubernetes.io/bound-by-controller: "yes"
+    creationTimestamp: "2025-12-07T16:33:15Z"
+    finalizers:
+    - kubernetes.io/pv-protection
+    labels:
+      app: llama-cpp
+      type: local
+    name: llama-models-pv
+    resourceVersion: "698955"
+    uid: 497a6a2c-6a98-47a2-9cf0-a5e06e55f817
+  spec:
+    accessModes:
+    - ReadOnlyMany
+    capacity:
+      storage: 20Gi
+    claimRef:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      name: llama-models-pvc
+      namespace: llm
+      resourceVersion: "698953"
+      uid: 1fce8c54-28e0-470c-8c59-450ba0bdeb41
+    local:
+      path: /mnt/k8s-storage/models
+    nodeAffinity:
+      required:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: kubernetes.io/hostname
+            operator: In
+            values:
+            - node-2
+    persistentVolumeReclaimPolicy: Retain
+    storageClassName: local-storage
+    volumeMode: Filesystem
+  status:
+    lastPhaseTransitionTime: "2025-12-07T16:34:53Z"
+    phase: Bound
+- apiVersion: v1
+  kind: PersistentVolume
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"v1","kind":"PersistentVolume","metadata":{"annotations":{},"labels":{"app":"loki","type":"local"},"name":"loki-pv"},"spec":{"accessModes":["ReadWriteOnce"],"capacity":{"storage":"200Gi"},"local":{"path":"/mnt/k8s-storage/loki"},"nodeAffinity":{"required":{"nodeSelectorTerms":[{"matchExpressions":[{"key":"kubernetes.io/hostname","operator":"In","values":["node-2"]}]}]}},"persistentVolumeReclaimPolicy":"Retain","storageClassName":"local-storage"}}
+      pv.kubernetes.io/bound-by-controller: "yes"
+    creationTimestamp: "2025-11-29T01:05:17Z"
+    finalizers:
+    - kubernetes.io/pv-protection
+    labels:
+      app: loki
+      type: local
+    name: loki-pv
+    resourceVersion: "80908"
+    uid: 08fb381e-edf7-4c36-992a-56eaa12aae33
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    capacity:
+      storage: 200Gi
+    claimRef:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      name: storage-loki-0
+      namespace: logging
+      resourceVersion: "80406"
+      uid: fb904474-cfe6-4cfe-b7f1-3b38a7de48c2
+    local:
+      path: /mnt/k8s-storage/loki
+    nodeAffinity:
+      required:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: kubernetes.io/hostname
+            operator: In
+            values:
+            - node-2
+    persistentVolumeReclaimPolicy: Retain
+    storageClassName: local-storage
+    volumeMode: Filesystem
+  status:
+    lastPhaseTransitionTime: "2025-11-29T17:11:40Z"
+    phase: Bound
+- apiVersion: v1
+  kind: PersistentVolume
+  metadata:
+    annotations:
+      local.path.provisioner/selected-node: node-2
+      pv.kubernetes.io/provisioned-by: rancher.io/local-path
+    creationTimestamp: "2025-12-26T23:58:26Z"
+    finalizers:
+    - kubernetes.io/pv-protection
+    name: pvc-4c678558-e96a-41ec-980f-4d112d90554e
+    resourceVersion: "2210106"
+    uid: 80b02a21-b3b3-40ce-8ab8-c3f2ae3ffc48
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    capacity:
+      storage: 50Gi
+    claimRef:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      name: storage-tempo-0
+      namespace: logging
+      resourceVersion: "2210088"
+      uid: 4c678558-e96a-41ec-980f-4d112d90554e
+    local:
+      path: /var/lib/rancher/k3s/storage/pvc-4c678558-e96a-41ec-980f-4d112d90554e_logging_storage-tempo-0
+    nodeAffinity:
+      required:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: kubernetes.io/hostname
+            operator: In
+            values:
+            - node-2
+    persistentVolumeReclaimPolicy: Delete
+    storageClassName: local-path
+    volumeMode: Filesystem
+  status:
+    lastPhaseTransitionTime: "2025-12-26T23:58:26Z"
+    phase: Bound
+- apiVersion: v1
+  kind: PersistentVolume
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"v1","kind":"PersistentVolume","metadata":{"annotations":{},"labels":{"app":"tempo","type":"local"},"name":"tempo-pv"},"spec":{"accessModes":["ReadWriteOnce"],"capacity":{"storage":"50Gi"},"local":{"path":"/mnt/k8s-storage/tempo"},"nodeAffinity":{"required":{"nodeSelectorTerms":[{"matchExpressions":[{"key":"kubernetes.io/hostname","operator":"In","values":["node-2"]}]}]}},"persistentVolumeReclaimPolicy":"Retain","storageClassName":"local-storage"}}
+      pv.kubernetes.io/bound-by-controller: "yes"
+    creationTimestamp: "2025-12-26T23:48:00Z"
+    finalizers:
+    - kubernetes.io/pv-protection
+    labels:
+      app: tempo
+      type: local
+    name: tempo-pv
+    resourceVersion: "2209449"
+    uid: 46506cf3-9884-429e-a6f0-af95affeb671
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    capacity:
+      storage: 50Gi
+    claimRef:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      name: tempo-pvc
+      namespace: logging
+      resourceVersion: "2209447"
+      uid: 40d04e0c-2c14-4322-8e3a-e9057c996619
+    local:
+      path: /mnt/k8s-storage/tempo
+    nodeAffinity:
+      required:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: kubernetes.io/hostname
+            operator: In
+            values:
+            - node-2
+    persistentVolumeReclaimPolicy: Retain
+    storageClassName: local-storage
+    volumeMode: Filesystem
+  status:
+    lastPhaseTransitionTime: "2025-12-26T23:48:00Z"
+    phase: Bound
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"v1","kind":"PersistentVolumeClaim","metadata":{"annotations":{},"name":"llama-models-pvc","namespace":"llm"},"spec":{"accessModes":["ReadOnlyMany"],"resources":{"requests":{"storage":"20Gi"}},"selector":{"matchLabels":{"app":"llama-cpp"}},"storageClassName":"local-storage"}}
+      pv.kubernetes.io/bind-completed: "yes"
+      pv.kubernetes.io/bound-by-controller: "yes"
+    creationTimestamp: "2025-12-07T16:34:53Z"
+    finalizers:
+    - kubernetes.io/pvc-protection
+    name: llama-models-pvc
+    namespace: llm
+    resourceVersion: "698957"
+    uid: 1fce8c54-28e0-470c-8c59-450ba0bdeb41
+  spec:
+    accessModes:
+    - ReadOnlyMany
+    resources:
+      requests:
+        storage: 20Gi
+    selector:
+      matchLabels:
+        app: llama-cpp
+    storageClassName: local-storage
+    volumeMode: Filesystem
+    volumeName: llama-models-pv
+  status:
+    accessModes:
+    - ReadOnlyMany
+    capacity:
+      storage: 20Gi
+    phase: Bound
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    annotations:
+      pv.kubernetes.io/bind-completed: "yes"
+      pv.kubernetes.io/bound-by-controller: "yes"
+    creationTimestamp: "2025-11-29T17:03:12Z"
+    finalizers:
+    - kubernetes.io/pvc-protection
+    labels:
+      app.kubernetes.io/component: single-binary
+      app.kubernetes.io/instance: loki
+      app.kubernetes.io/name: loki
+    name: storage-loki-0
+    namespace: logging
+    ownerReferences:
+    - apiVersion: apps/v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: StatefulSet
+      name: loki
+      uid: b1ed6ca6-b0e2-4ab9-84a2-4f0725e76082
+    resourceVersion: "80910"
+    uid: fb904474-cfe6-4cfe-b7f1-3b38a7de48c2
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: 200Gi
+    selector:
+      matchLabels:
+        app: loki
+        type: local
+    storageClassName: local-storage
+    volumeMode: Filesystem
+    volumeName: loki-pv
+  status:
+    accessModes:
+    - ReadWriteOnce
+    capacity:
+      storage: 200Gi
+    phase: Bound
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    annotations:
+      pv.kubernetes.io/bind-completed: "yes"
+      pv.kubernetes.io/bound-by-controller: "yes"
+      volume.beta.kubernetes.io/storage-provisioner: rancher.io/local-path
+      volume.kubernetes.io/selected-node: node-2
+      volume.kubernetes.io/storage-provisioner: rancher.io/local-path
+    creationTimestamp: "2025-12-26T23:58:24Z"
+    finalizers:
+    - kubernetes.io/pvc-protection
+    labels:
+      app.kubernetes.io/instance: tempo
+      app.kubernetes.io/name: tempo
+    name: storage-tempo-0
+    namespace: logging
+    resourceVersion: "2210108"
+    uid: 4c678558-e96a-41ec-980f-4d112d90554e
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: 50Gi
+    storageClassName: local-path
+    volumeMode: Filesystem
+    volumeName: pvc-4c678558-e96a-41ec-980f-4d112d90554e
+  status:
+    accessModes:
+    - ReadWriteOnce
+    capacity:
+      storage: 50Gi
+    phase: Bound
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"v1","kind":"PersistentVolumeClaim","metadata":{"annotations":{},"labels":{"app":"tempo"},"name":"tempo-pvc","namespace":"logging"},"spec":{"accessModes":["ReadWriteOnce"],"resources":{"requests":{"storage":"50Gi"}},"selector":{"matchLabels":{"app":"tempo","type":"local"}},"storageClassName":"local-storage"}}
+      pv.kubernetes.io/bind-completed: "yes"
+      pv.kubernetes.io/bound-by-controller: "yes"
+    creationTimestamp: "2025-12-26T23:48:00Z"
+    finalizers:
+    - kubernetes.io/pvc-protection
+    labels:
+      app: tempo
+    name: tempo-pvc
+    namespace: logging
+    resourceVersion: "2209451"
+    uid: 40d04e0c-2c14-4322-8e3a-e9057c996619
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: 50Gi
+    selector:
+      matchLabels:
+        app: tempo
+        type: local
+    storageClassName: local-storage
+    volumeMode: Filesystem
+    volumeName: tempo-pv
+  status:
+    accessModes:
+    - ReadWriteOnce
+    capacity:
+      storage: 50Gi
+    phase: Bound
+kind: List
+metadata:
+  resourceVersion: ""
