@@ -62,7 +62,8 @@
       "Bash(git commit:*)",
       "Bash(paste:*)",
       "Bash(kustomize build:*)",
-      "Bash(kubectl kustomize:*)"
+      "Bash(kubectl kustomize:*)",
+      "Bash(flux check:*)"
     ],
     "deny": [],
     "ask": []
