@@ -13,10 +13,11 @@ FastAPI service for LLM-powered log analysis with OpenTelemetry instrumentation 
 
 ## Features
 
-- **Streaming log analysis:** Real-time LLM-powered log analysis with streaming responses
+- **Dual API endpoints:** Streaming (real-time) and JSON (programmatic) log analysis
 - **OpenTelemetry instrumentation:** Distributed tracing with custom spans for Loki queries and LLM calls
 - **Structured logging:** JSON logs with automatic trace context injection (trace_id, span_id)
 - **Trace-to-logs correlation:** Bidirectional linking between traces and logs in Grafana
+- **Evaluation framework:** Automated LLM quality validation comparing analysis with raw logs
 - **Kubernetes-native:** ConfigMap-based configuration, health checks, resource limits
 
 ## Development
@@ -106,9 +107,9 @@ just test-k8s-local namespace=log-analyzer
 
 ## API Endpoints
 
-### `POST /v1/analyze/stream`
+### `POST /v1/analyze`
 
-Streaming endpoint that analyzes logs and returns results in real-time.
+JSON endpoint for programmatic log analysis. Returns structured data suitable for automation and evaluation.
 
 **Request:**
 ```json
@@ -119,15 +120,55 @@ Streaming endpoint that analyzes logs and returns results in real-time.
   },
   "filters": {
     "namespace": "log-analyzer",
-    "pod": "log-analyzer-.*",  // Regex pattern
-    "container": "log-analyzer",
-    "node": "node-1"
+    "pod": "log-analyzer-.*",  // Regex pattern (optional)
+    "container": "log-analyzer",  // Optional
+    "node": "node-1"  // Optional
   },
   "limit": 15  // Max logs to analyze (default: 15, max: 200)
 }
 ```
 
-**Response:** Streaming text with log summary and LLM analysis
+**Response:**
+```json
+{
+  "log_count": 15,
+  "analysis": "Based on the provided logs, there is no apparent issue...",
+  "logs": [
+    {
+      "time": "2025-12-27T17:45:18.492042Z",
+      "source": "llm/llama-server",
+      "message": "request: POST /v1/chat/completions 200",
+      "pod": "llama-cpp-77c6884846-2rj47",
+      "node": "node-2"
+    }
+  ]
+}
+```
+
+**Use cases:** Evaluation scripts, CI/CD pipelines, automated monitoring
+
+### `POST /v1/analyze/stream`
+
+Streaming endpoint that analyzes logs and returns results in real-time. Same request format as `/v1/analyze`.
+
+**Response:** Streaming text with formatted header, logs, and LLM analysis:
+```
+=== Log Analyzer ===
+Cluster: homelab
+Time Window: 2025-12-26 → 2025-12-27
+Log Count: 15
+
+--- Logs ---
+[2025-12-27T17:45:18.492042Z] llm/llama-server (pod=llama-cpp-77c6884846-2rj47)
+request: POST /v1/chat/completions 200
+
+--- Analysis ---
+Based on the provided logs, there is no apparent issue...
+
+=== End of Analysis ===
+```
+
+**Use cases:** Interactive CLI tools, web dashboards, real-time monitoring
 
 ### `GET /health`
 
@@ -145,20 +186,44 @@ Environment variables (set via ConfigMap in Kubernetes):
 
 ## OpenTelemetry Instrumentation
 
-The service emits distributed traces with the following span structure:
+Both endpoints emit distributed traces with comprehensive instrumentation:
 
+### `/v1/analyze` (JSON endpoint)
+```
+POST /v1/analyze
+└── analyze_logs (root span)
+    ├── Attributes: namespace, log_limit, time_range_hours
+    ├── query_loki
+    │   └── Attributes: logql.query, logql.limit, loki.results_count
+    ├── flatten_logs
+    │   └── Attributes: logs.flattened_count
+    ├── normalize_logs
+    └── call_llm
+        └── Attributes: llm.model, llm.max_tokens, llm.temperature,
+                        llm.streaming=false, llm.tokens_prompt,
+                        llm.tokens_completion, llm.tokens_total
+```
+
+### `/v1/analyze/stream` (Streaming endpoint)
 ```
 POST /v1/analyze/stream
-├── analyze_logs_stream (custom span with namespace, log_limit attributes)
-│   ├── query_loki (custom span with logql.query attribute)
-│   ├── flatten_logs (custom span with logs.flattened_count)
-│   ├── normalize_logs (custom span)
-│   └── call_llm (custom span with llm.model, llm.tokens_generated)
+└── analyze_logs_stream (root span)
+    ├── Attributes: namespace, log_limit, time_range_hours
+    ├── query_loki
+    │   └── Attributes: logql.query, logql.limit, loki.results_count
+    ├── flatten_logs
+    │   └── Attributes: logs.flattened_count
+    ├── normalize_logs
+    └── stream_llm (call_llm span)
+        └── Attributes: llm.model, llm.max_tokens, llm.temperature,
+                        llm.streaming=true, llm.tokens_generated
 ```
 
-**Key Design:** All spans are created inside the generator function (`event_stream()`) to maintain span context during streaming. This ensures child spans properly attach and logs capture the trace_id.
+**Key Design:** All spans in the streaming endpoint are created inside the generator function (`event_stream()`) to maintain span context during streaming. This ensures child spans properly attach and logs capture the trace_id.
 
 **Span Filtering:** The service filters out noisy "http send" spans from streaming responses using a custom `FilterSpanProcessor`.
+
+**Token Tracking:** Both endpoints track LLM token usage in spans, enabling cost analysis and performance optimization.
 
 ## Structured Logging
 
@@ -180,17 +245,89 @@ Logs are emitted in JSON format with automatic trace context injection:
 
 These logs are scraped by Grafana Alloy and stored in Loki, enabling trace-to-logs correlation in Grafana.
 
+## Evaluation Framework
+
+The service includes an automated evaluation system that compares LLM analysis quality against raw logs.
+
+### Running Evaluations
+
+From the repo root:
+
+```bash
+# Evaluate last 30 minutes of llm namespace
+just evaluate llm 30m
+
+# Evaluate last 1 hour of kube-system namespace
+just evaluate kube-system 1h
+
+# Evaluate last 24 hours of log-analyzer namespace (default)
+just evaluate log-analyzer 24h
+```
+
+### How It Works
+
+The evaluation script (`helpers/evaluate.py`):
+
+1. **Queries both endpoints** with identical parameters:
+   - `/v1/analyze` (LLM analysis)
+   - Loki API directly (raw logs)
+
+2. **Saves side-by-side comparison** to `tmp/evaluation-<timestamp>.json`:
+   ```json
+   {
+     "metadata": {
+       "timestamp": "20251227-202234",
+       "namespace": "llm",
+       "duration": "30m",
+       "time_range": { "start": "...", "end": "..." }
+     },
+     "llm_analysis": {
+       "output": "Based on the provided logs...",
+       "char_count": 3624
+     },
+     "raw_logs": {
+       "count": 15,
+       "logs": [ /* Full log entries with labels */ ]
+     },
+     "comparison": {
+       "logs_analyzed": 15,
+       "analysis_length": 3624,
+       "has_error_in_analysis": false,
+       "has_no_logs": false
+     }
+   }
+   ```
+
+3. **Enables validation** of:
+   - Did the LLM hallucinate logs that don't exist?
+   - Did the LLM miss important logs?
+   - Is the analysis quality improving over time?
+
+### Use Cases
+
+- **Prompt tuning:** Compare before/after when changing system prompts
+- **Model selection:** Evaluate different models on the same dataset
+- **Regression testing:** Ensure code changes don't degrade analysis quality
+- **Golden dataset creation:** Build a library of evaluation cases
+
+### Implementation Details
+
+- **Single Python script:** `helpers/evaluate.py` (no bash dependencies)
+- **UV integration:** Uses `uv run` for hermetic Python environment
+- **Port-forward management:** Automatically sets up and tears down connections
+- **Time range parsing:** Supports `5m`, `2h`, `24h` duration formats
+
 ## Observability in Grafana
 
 ### Viewing Traces
 
 1. Navigate to **Explore** → **Tempo**
 2. Search for service: `log-analyzer`
-3. Click on a `POST /v1/analyze/stream` trace
+3. Click on a `POST /v1/analyze` or `POST /v1/analyze/stream` trace
 4. Expand spans to see:
-   - `analyze_logs_stream` (root)
+   - `analyze_logs` or `analyze_logs_stream` (root)
    - `query_loki` (with LogQL query)
-   - `call_llm` (with model and token count)
+   - `call_llm` or `stream_llm` (with model and token count)
 5. Click **"Logs for this span"** to see correlated logs
 
 ### Viewing Logs
@@ -239,7 +376,8 @@ To see ALL logs including those dropped by Alloy, temporarily remove the `stage.
 
 ## Next Steps
 
-- [ ] Add `/v2/analyze` endpoint with vector database retrieval (Phase 3B)
-- [ ] Implement evaluation framework with golden dataset
-- [ ] Add Grafana dashboards for extraction accuracy metrics
+- [ ] Build golden dataset library from evaluation runs
+- [ ] Add Grafana dashboards for LLM quality metrics (accuracy, hallucination rate)
+- [ ] Implement `/v2/analyze` endpoint with vector database retrieval (Phase 3B)
+- [ ] Add automated evaluation in CI/CD pipeline
 - [ ] Expose via Envoy Gateway HTTPRoute with authentication
