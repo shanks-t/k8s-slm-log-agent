@@ -96,6 +96,12 @@ just test-k8s-local [namespace] [duration]
 # Examples:
 #   just test-k8s-local llm 30m       # Automatically sets up port-forward
 
+# Evaluate LLM analysis quality against raw logs
+just evaluate [namespace] [duration]
+# Examples:
+#   just evaluate llm 30m             # Compare LLM analysis with raw Loki logs
+#   just evaluate kube-system 1h      # Saves to tmp/evaluation-<timestamp>.json
+
 # List all available recipes
 just --list
 ```

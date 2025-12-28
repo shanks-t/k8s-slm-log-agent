@@ -180,11 +180,12 @@ test-k8s-local namespace="log-analyzer" duration="1h":
 # Queries both log-analyzer (LLM analysis) and Loki (raw logs) with identical
 # parameters, then saves outputs side-by-side for human or agent evaluation.
 #
-# Output: Creates /tmp/evaluation-<timestamp>.json with:
+# Output: Creates tmp/evaluation-<timestamp>.json with:
 #   - query_params: The query used
-#   - llm_analysis: What the log-analyzer produced
+#   - llm_analysis: Just the LLM analysis text (from /v1/analyze endpoint)
 #   - raw_logs: What Loki returned (same query)
 #   - metadata: Timestamp, namespace, duration
+#   - comparison: Metrics for evaluation (log count, error detection, etc.)
 #
 # Use case: Validate LLM analysis quality, find missed logs, tune prompts
 #
@@ -192,4 +193,4 @@ test-k8s-local namespace="log-analyzer" duration="1h":
 #   just evaluate llm 30m              # Evaluate last 30 min of llm namespace
 #   just evaluate kube-system 1h       # Evaluate last 1 hour
 evaluate namespace="log-analyzer" duration="1h":
-    @helpers/evaluate.sh {{namespace}} {{duration}}
+    @uv run python helpers/evaluate.py {{namespace}} {{duration}}
