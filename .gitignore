@@ -17,3 +17,5 @@ wheels/
 
 # Evaluation output files
 tmp/
+
+.env
