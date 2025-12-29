@@ -1,0 +1,27 @@
+---
+# PersistentVolumeClaim for Tempo on Node 2
+# This claims the tempo-pv for use by the Tempo pod
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tempo-pvc
+  namespace: logging
+  labels:
+    app: tempo
+spec:
+  # Access mode must match the PV
+  accessModes:
+    - ReadWriteOnce
+
+  # StorageClass must match the PV
+  storageClassName: local-storage
+
+  # Request 50GB to match the PV capacity
+  resources:
+    requests:
+      storage: 50Gi
+
+  # Selector to bind to the specific PV
+  selector:
+    matchLabels:
+      app: tempo

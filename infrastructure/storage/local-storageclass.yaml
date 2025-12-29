@@ -1,0 +1,14 @@
+---
+# StorageClass for local node storage
+# Used by: PVCs that bind to local PVs on specific nodes
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-storage
+# No provisioner - this is for pre-created PVs only
+provisioner: kubernetes.io/no-provisioner
+# WaitForFirstConsumer ensures the pod is scheduled on the correct node
+# before the PVC binds to a PV (critical for local storage)
+volumeBindingMode: WaitForFirstConsumer
+# Retain volumes when PVCs are deleted (safe for production)
+reclaimPolicy: Retain

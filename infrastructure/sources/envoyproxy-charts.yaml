@@ -8,4 +8,5 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1h  # Check for chart updates every hour
+  type: oci  # Required for OCI registries
   url: oci://docker.io/envoyproxy
