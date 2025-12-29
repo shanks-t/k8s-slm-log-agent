@@ -85,7 +85,8 @@
       "Bash(while kubectl get ns flux-system)",
       "Bash(do echo \"Waiting for namespace to terminate...\")",
       "Bash(done)",
-      "Bash(kubectl version:*)"
+      "Bash(kubectl version:*)",
+      "Bash(kubectl taint:*)"
     ],
     "deny": [],
     "ask": []

@@ -625,7 +625,7 @@ export GITHUB_REPO=k8s-slm-log-agent
 flux bootstrap github \
   --owner=$GITHUB_USER \
   --repository=$GITHUB_REPO \
-  --branch=agent/flux \
+  --branch=agent/migrate-k8s \
   --path=clusters/homelab \
   --personal \
   --components-extra=image-reflector-controller,image-automation-controller
