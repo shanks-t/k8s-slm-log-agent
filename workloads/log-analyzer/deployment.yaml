@@ -29,7 +29,7 @@ spec:
       - name: log-analyzer
         # TODO: Update with your GitHub username in .env, then run: just build push
         # Image will be updated by 'just deploy' to use commit SHA
-        image: ghcr.io/shanks-tlog-analyzer:latest
+        image: ghcr.io/shanks-t/log-analyzer:latest
         imagePullPolicy: Always  # Always pull from ghcr.io for latest version
         ports:
         - containerPort: 8000
