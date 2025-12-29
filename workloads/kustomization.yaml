@@ -1,0 +1,8 @@
+---
+# Root kustomization for application workloads
+# This file aggregates all application-level components
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - llm/             # LLaMA.cpp LLM inference server
+  - log-analyzer/    # FastAPI log analysis service

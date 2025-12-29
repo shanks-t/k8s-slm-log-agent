@@ -1,0 +1,51 @@
+USER-SUPPLIED VALUES:
+gateway:
+  enabled: false
+ingress:
+  enabled: false
+nodeSelector:
+  hardware: heavy
+persistence:
+  accessModes:
+  - ReadWriteOnce
+  enabled: true
+  existingClaim: tempo-pvc
+  size: 50Gi
+replicas: 1
+service:
+  type: ClusterIP
+serviceMonitor:
+  enabled: false
+tempo:
+  metricsGenerator:
+    enabled: false
+  multitenancyEnabled: false
+  overrides:
+    per_tenant_override_config: /conf/overrides.yaml
+  pullPolicy: IfNotPresent
+  repository: grafana/tempo
+  resources:
+    limits:
+      cpu: 2
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+  retention: 168h
+  server:
+    http_listen_port: 3200
+  storage:
+    trace:
+      backend: local
+      block:
+        version: vParquet4
+      local:
+        path: /var/tempo/traces
+      wal:
+        path: /var/tempo/wal
+  tag: ""
+tolerations:
+- effect: NoSchedule
+  key: heavy
+  operator: Equal
+  value: "true"

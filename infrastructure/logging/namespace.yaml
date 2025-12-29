@@ -1,0 +1,10 @@
+---
+# Logging namespace for all observability components
+# Loki, alloy and related services will live here
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: logging
+  labels:
+    name: logging
+    purpose: observability

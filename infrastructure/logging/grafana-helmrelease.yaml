@@ -1,0 +1,144 @@
+---
+# HelmRelease for Grafana dashboarding and visualization
+# Manages: Dashboards, datasources, and UI
+# Deployed on: Node 1 (light hardware)
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: grafana
+  namespace: logging
+spec:
+  interval: 5m  # Check for updates every 5 minutes
+  chart:
+    spec:
+      chart: grafana
+      version: '10.2.0'  # Pin to current version
+      sourceRef:
+        kind: HelmRepository
+        name: grafana
+        namespace: flux-system
+  install:
+    createNamespace: false
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  # Values from inventory/helm-values-grafana.yaml
+  values:
+    # Admin credentials (TODO: Move to Secret in Step 6)
+    adminUser: admin
+    adminPassword: admin  # SECURITY: Change in production!
+
+    # Node placement: Run on Node 1 (light hardware)
+    nodeSelector:
+      hardware: light
+
+    # Resource limits (lightweight)
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+    # Persistence disabled (dashboards/datasources in Git via Flux)
+    persistence:
+      enabled: false
+
+    # Service configuration
+    service:
+      type: ClusterIP
+      port: 80
+      targetPort: 3000
+
+    # Security context
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 472
+      fsGroup: 472
+
+    # Environment variables
+    env:
+      TZ: America/Chicago
+
+    # Grafana configuration
+    grafana.ini:
+      server:
+        root_url: '%(protocol)s://%(domain)s/grafana'
+        serve_from_sub_path: true  # Serve from /grafana path
+      analytics:
+        check_for_updates: false
+        reporting_enabled: false
+      auth.anonymous:
+        enabled: false
+      log:
+        mode: console
+        level: info
+
+    # Datasources: Loki and Tempo with trace-to-logs correlation
+    datasources:
+      datasources.yaml:
+        apiVersion: 1
+        datasources:
+          # Loki datasource (default)
+          - name: Loki
+            type: loki
+            access: proxy
+            url: http://loki.logging.svc.cluster.local:3100
+            isDefault: true
+            editable: true
+            jsonData:
+              maxLines: 1000
+              # Derive TraceID field from logs for linking to Tempo
+              derivedFields:
+                - name: TraceID
+                  matcherRegex: 'trace_id=(\w+)'
+                  url: '$${__value.raw}'
+                  datasourceUid: tempo
+
+          # Tempo datasource (distributed tracing)
+          - name: Tempo
+            type: tempo
+            uid: tempo
+            access: proxy
+            url: http://tempo.logging.svc.cluster.local:3200
+            editable: true
+            jsonData:
+              # Trace-to-logs correlation
+              tracesToLogs:
+                datasourceUid: loki
+                filterByTraceID: false
+                filterBySpanID: false
+                mapTagNamesEnabled: false
+                spanStartTimeShift: 1h
+                spanEndTimeShift: 1h
+                tags:
+                  - job
+                  - instance
+                  - pod
+                  - namespace
+                mappedTags:
+                  - key: service.name
+                    value: service
+              # Loki search integration
+              lokiSearch:
+                datasourceUid: loki
+              # Service graph
+              serviceMap:
+                datasourceUid: prometheus
+              # Node graph
+              nodeGraph:
+                enabled: true
+              search:
+                hide: false
+
+    # Dashboard providers (none for now, add via Flux later)
+    dashboardProviders: {}
+
+    # Dashboards (none for now, add via Flux later)
+    dashboards: {}
+
+    # Plugins (none for now, add via Flux later)
+    plugins: []

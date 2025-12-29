@@ -1,0 +1,43 @@
+---
+# PersistentVolume for Tempo on Node 2
+# This defines a volume that points to the Samsung NVMe storage
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: tempo-pv
+  labels:
+    app: tempo
+    type: local
+spec:
+  # Storage capacity - 50GB allocated for Tempo
+  # Traces are more ephemeral than logs, 50GB is sufficient for 7-day retention
+  capacity:
+    storage: 50Gi
+
+  # Access mode: ReadWriteOnce means one pod can mount it
+  # Perfect for monolithic Tempo (single pod)
+  accessModes:
+    - ReadWriteOnce
+
+  # persistentVolumeReclaimPolicy determines what happens when PVC is deleted
+  # Retain = keep the data even if PVC is deleted (safe for production)
+  persistentVolumeReclaimPolicy: Retain
+
+  # storageClassName must match the PVC below
+  storageClassName: local-storage
+
+  # local volume type - directly uses host filesystem
+  local:
+    path: /mnt/k8s-storage/tempo
+
+  # nodeAffinity ensures this PV is only used on Node 2
+  # Critical: This ties the PV to the physical node with the Samsung NVMe
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - node-2  # Node 2's hostname
+

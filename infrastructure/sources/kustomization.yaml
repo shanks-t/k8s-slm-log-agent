@@ -1,0 +1,8 @@
+---
+# Kustomization for Helm chart repositories
+# These must be created first so HelmReleases can reference them
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - grafana-charts.yaml       # Grafana Helm charts (Loki, Grafana, Tempo, Alloy)
+  - envoyproxy-charts.yaml    # Envoy Gateway Helm charts

@@ -1,0 +1,11 @@
+---
+# Kustomization for LLM inference workload
+# LLaMA.cpp server running on Node 2 (heavy hardware)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: llm
+resources:
+  - namespace.yaml       # llm namespace
+  - llama-pvc.yaml       # PVC for model storage (binds to llama-pv)
+  - llama-deployment.yaml  # LLaMA.cpp Deployment
+  - llama-service.yaml   # ClusterIP service

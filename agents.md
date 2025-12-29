@@ -2,13 +2,45 @@
 
 ## Learning Mode
 
-**User is actively learning how to build AI agents.**
+**User is actively learning:**
+1. **How to build AI agents** (LLM-powered log analysis, RAG systems)
+2. **Kubernetes administration** in preparation for the **Certified Kubernetes Administrator (CKA)** exam
 
+### Learning Approach
 - **Default approach**: Coach and guide, don't just write code
 - **Explain concepts**: Help user understand what to build and why
 - **Ask questions**: Help user think through design decisions
 - **Provide hints**: Point to documentation, patterns, and best practices
 - **Write code only when**: User explicitly requests it ("write the code", "implement this for me")
+
+### CKA Exam Preparation Focus
+When working with Kubernetes commands and concepts, **relate them to CKA exam domains**:
+
+**CKA Exam Domains (v1.35):**
+1. **Cluster Architecture, Installation & Configuration (25%)**
+   - Control plane components, kubeadm, RBAC, Kubernetes upgrades
+2. **Workloads & Scheduling (15%)**
+   - Deployments, ConfigMaps, Secrets, scaling, node selectors, taints/tolerations
+3. **Services & Networking (20%)**
+   - Services, Ingress, NetworkPolicies, CNI plugins, DNS
+4. **Storage (10%)**
+   - PersistentVolumes, PersistentVolumeClaims, StorageClasses, volume types
+5. **Troubleshooting (30%)**
+   - Cluster and application failures, logs, monitoring, debugging
+
+**For each Kubernetes operation:**
+- **Identify which CKA domain** it relates to
+- **Explain the exam-relevant aspects** (what you'd need to know/do on the exam)
+- **Provide exam-style context** (time pressure, kubectl efficiency, imperative vs declarative)
+- **Highlight common exam scenarios** this prepares you for
+
+### CKA Exam Skills to Practice
+- **kubectl imperative commands** (faster than writing YAML)
+- **kubectl explain** for API documentation during exam
+- **JSONPath queries** for extracting specific data
+- **Troubleshooting patterns** (logs, events, describe, exec)
+- **YAML generation shortcuts** (`kubectl create --dry-run=client -o yaml`)
+- **Time management** (17 questions in 2 hours = ~7 minutes per question)
 
 ## Communication Style
 
@@ -602,16 +634,29 @@ Explore advanced LLM and retrieval patterns.
 
 ---
 
-## **Phase 7 — (Optional) Migrate to Full Kubernetes**
-Replace K3s with production-grade Kubernetes.
+## **Phase 7 — Migrate to Full Kubernetes (CKA Exam Prep)** ✅ COMPLETE
+Replace K3s with production-grade Kubernetes using kubeadm.
 
-1. Replace K3s with kubeadm or "Kubernetes the Hard Way"
-2. Migrate workloads using the same Helm charts/manifests
-3. Validate:
-   - Scheduling
-   - Affinity rules
-   - Control-plane separation
-   - Production-like behavior  
+**Status:** ✅ COMPLETE
+- K3s completely uninstalled from both nodes
+- Full Kubernetes v1.35 installed via kubeadm
+- Control plane initialized on node-1 with kubeadm
+- Worker node joined using kubeadm join command
+- Cilium CNI installed and configured
+- Node labels and taints applied for workload scheduling
+- Flux CD GitOps ready for workload migration
+
+**CKA Exam Skills Practiced:**
+- **Cluster Installation (Domain 1 - 25%):** kubeadm init, join tokens, CNI installation
+- **Cluster Upgrade (Domain 1):** Multi-version upgrade path (1.31→1.35)
+- **Node Management (Domain 2 - 15%):** Node labeling, taints/tolerations
+- **Troubleshooting (Domain 5 - 30%):** CNI debugging, image pull issues, kubelet logs
+
+**Exam-Relevant Scenarios:**
+- Installing a cluster from scratch (exam may ask you to add worker nodes)
+- Troubleshooting node NotReady status (common exam question)
+- Understanding control plane components and their roles
+- CNI plugin configuration and troubleshooting  
 
 ---
 

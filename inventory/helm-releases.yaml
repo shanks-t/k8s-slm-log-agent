@@ -1,0 +1,35 @@
+- app_version: v1.11.3
+  chart: alloy-1.4.0
+  name: alloy
+  namespace: logging
+  revision: "2"
+  status: deployed
+  updated: 2025-11-28 19:35:40.667488 -0600 CST
+- app_version: v1.4.6
+  chart: gateway-helm-v1.4.6
+  name: eg
+  namespace: envoy-gateway-system
+  revision: "1"
+  status: deployed
+  updated: 2025-11-28 11:39:53.781708 -0600 CST
+- app_version: 12.3.0
+  chart: grafana-10.2.0
+  name: grafana
+  namespace: logging
+  revision: "2"
+  status: deployed
+  updated: 2025-12-26 18:03:53.399552 -0600 CST
+- app_version: 3.3.0
+  chart: loki-6.21.0
+  name: loki
+  namespace: logging
+  revision: "6"
+  status: deployed
+  updated: 2025-11-29 11:03:12.005696 -0600 CST
+- app_version: 2.9.0
+  chart: tempo-1.24.1
+  name: tempo
+  namespace: logging
+  revision: "3"
+  status: deployed
+  updated: 2025-12-26 18:01:06.424464 -0600 CST

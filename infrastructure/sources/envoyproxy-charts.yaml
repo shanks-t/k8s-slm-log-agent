@@ -1,0 +1,11 @@
+---
+# HelmRepository for Envoy Gateway charts
+# Used by: Envoy Gateway HelmRelease
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: HelmRepository
+metadata:
+  name: envoyproxy
+  namespace: flux-system
+spec:
+  interval: 1h  # Check for chart updates every hour
+  url: https://gateway.envoyproxy.io

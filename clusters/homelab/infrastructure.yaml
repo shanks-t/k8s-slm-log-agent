@@ -1,0 +1,29 @@
+---
+# Flux Kustomization for infrastructure
+# This is the entry point for all platform-level resources
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: infrastructure
+  namespace: flux-system
+spec:
+  suspend: true          # SAFE MODE: Prevents reconciliation until removed
+  interval: 10m          # Check Git every 10 minutes
+  retryInterval: 1m      # Retry failures after 1 minute
+  timeout: 5m            # Max time for apply operations
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./infrastructure # Path in Git repository
+  prune: true            # Delete resources removed from Git
+  wait: true             # Wait for resources to be ready
+  # Health checks ensure critical components are running
+  healthChecks:
+    - apiVersion: helm.toolkit.fluxcd.io/v2beta1
+      kind: HelmRelease
+      name: loki
+      namespace: logging
+    - apiVersion: helm.toolkit.fluxcd.io/v2beta1
+      kind: HelmRelease
+      name: eg
+      namespace: envoy-gateway-system

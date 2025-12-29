@@ -1,0 +1,11 @@
+---
+# Kustomization for observability stack
+# Includes logging, metrics, and distributed tracing
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml              # logging namespace
+  - loki-helmrelease.yaml       # Loki log aggregation
+  - grafana-helmrelease.yaml    # Grafana dashboards
+  - tempo-helmrelease.yaml      # Tempo distributed tracing
+  - alloy-helmrelease.yaml      # Alloy log collection (DaemonSet)
