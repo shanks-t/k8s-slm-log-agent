@@ -1,9 +1,72 @@
 # K3S to Full Kubernetes Migration Plan
 
-**Date:** 2025-12-28
+**Date:** 2025-12-28 (Updated: 2025-12-29)
 **Reason:** K3S kube-router NetworkPolicy incompatibility blocking Flux CD
 **Estimated Time:** 2-3 hours
 **Risk Level:** Medium (no critical data loss risk)
+**Status:** ✅ **COMPLETED** (2025-12-29)
+**Purpose:** Production Kubernetes cluster + CKA exam preparation
+
+---
+
+## Migration Outcome Summary
+
+**Final Cluster State:**
+- ✅ Kubernetes v1.35.0 (upgraded from v1.31)
+- ✅ 2 nodes (node-1 control-plane, node-2 worker)
+- ✅ Flannel CNI (vxlan, UDP 8472)
+- ✅ Same network CIDRs as K3S (Pod: 10.42.0.0/16, Service: 10.43.0.0/16)
+- ✅ Node labels and taints applied
+- ✅ Ready for Flux CD bootstrap
+
+**CKA Exam Skills Practiced:**
+- Domain 1 (25%): Cluster installation with kubeadm, multi-version upgrade
+- Domain 2 (15%): Node labeling, taints/tolerations
+- Domain 3 (20%): CNI installation and troubleshooting
+- Domain 5 (30%): Node NotReady troubleshooting, CNI debugging, shell command issues
+
+---
+
+## Lessons Learned (CKA Exam Insights)
+
+### 1. Kubernetes Version Upgrades Must Be Incremental
+**Issue:** Attempted to skip from v1.31 → v1.35 directly
+**Error:** `kubeadm only supports deploying clusters with control plane version >= 1.34.0`
+**Solution:** Fresh install with v1.35.0 instead of 4-step upgrade (1.31→1.32→1.33→1.34→1.35)
+**CKA Lesson:** On exam, Kubernetes upgrades must be done one minor version at a time
+
+### 2. SSH Command Shell Glob Expansion Gotcha
+**Issue:** `ssh node1 'sudo rm -rf /etc/cni/net.d/*'` didn't delete files
+**Root Cause:** `*` glob expanded on local machine (no such directory), not on remote node
+**Solution:** Either escape glob (`\*`), or SSH in directly and run command
+**CKA Lesson:** On exam, when remote commands fail, SSH into node and run directly (safer, faster)
+
+### 3. Node "Ready" Doesn't Mean "Functional"
+**Issue:** Node showed Ready but CoreDNS stuck in ContainerCreating for 30+ minutes
+**Root Cause:** CNI config file existed but no CNI pods running (half-installed CNI)
+**Troubleshooting Pattern:**
+```bash
+kubectl get nodes              # Ready
+kubectl get pods -A            # CoreDNS ContainerCreating
+ls /etc/cni/net.d/            # Config exists
+kubectl get pods -n kube-system | grep flannel  # No CNI pods!
+```
+**CKA Lesson:** Always verify CNI pods running, not just node status
+
+### 4. kubeadm reset Doesn't Clean Everything
+**Files NOT removed by `kubeadm reset`:**
+- `/etc/cni/net.d/*` (CNI configs)
+- `/opt/cni/bin/*` (CNI binaries)
+- Some iptables rules
+**CKA Lesson:** Manual cleanup required after reset for clean reinstall
+
+### 5. Flannel vs Cilium for CKA Exam
+**Decision:** Use Flannel initially, upgrade to Cilium later as learning exercise
+**Rationale:**
+- Flannel is simpler and more common on CKA exam
+- Cilium upgrade later teaches CNI replacement (another CKA skill)
+- Exam typically uses Flannel, Calico, or Weave
+**CKA Lesson:** Practice with exam-standard tools first, then explore alternatives
 
 ---
 
@@ -198,13 +261,11 @@ done
 
 ```bash
 ssh node1 'sudo kubeadm init \
-  --pod-network-cidr=10.42.0.0/16 \
-  --service-cidr=10.43.0.0/16 \
+  --pod-network-cidr=10.244.0.0/16 \
+  --service-cidr=10.96.0.0/12 \
   --apiserver-advertise-address=10.0.0.102 \
   --node-name=node-1'
 ```
-
-**Note:** Using same CIDRs as K3S to avoid IP conflicts.
 
 #### 3.2 Configure kubectl Access
 
@@ -232,40 +293,177 @@ kubectl get pods -A
 
 ### Phase 4: Install CNI Plugin (15 minutes)
 
-**Choice:** Cilium (recommended - no NetworkPolicy quirks, better observability)
+**CKA Domain 3 - Services & Networking (20%)**
 
-#### 4.1 Install Cilium CLI
+**CNI Choice:** Flannel (CKA exam standard, simple, widely used)
+
+**Why Flannel:**
+- Most common CNI on CKA exam (along with Calico)
+- Simple overlay network (VXLAN)
+- No external dependencies
+- Easy to troubleshoot
+- Can upgrade to Cilium later as learning exercise
+
+**CKA Exam Note:** Exam will specify which CNI to install. Common options:
+- Flannel: `kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml`
+- Calico: `kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml`
+- Weave: `kubectl apply -f https://github.com/weaveworks/weave/releases/download/v2.8.1/weave-daemonset-k8s.yaml`
+
+#### 4.1 Verify CNI Directory is Clean
 
 ```bash
-# On local machine
-CILIUM_CLI_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt)
-CLI_ARCH=amd64
-curl -L --fail --remote-name-all https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-darwin-${CLI_ARCH}.tar.gz{,.sha256sum}
-shasum -a 256 -c cilium-darwin-${CLI_ARCH}.tar.gz.sha256sum
-sudo tar xzvfC cilium-darwin-${CLI_ARCH}.tar.gz /usr/local/bin
-rm cilium-darwin-${CLI_ARCH}.tar.gz{,.sha256sum}
+# CKA Troubleshooting Tip: Always check before installing CNI
+ssh node1 'ls /etc/cni/net.d/'
+# Should be empty (or just .kubernetes-cni-keep)
+
+# If files exist from previous attempts:
+ssh node1
+sudo rm -rf /etc/cni/net.d/*
+exit
+
+# CKA Lesson: SSH glob expansion gotcha!
+# Don't use: ssh node1 'sudo rm /etc/cni/net.d/*'  (glob expands locally)
+# Use: SSH in directly and run command (safer on exam)
+```
+#### Had to cleanup old cilium and flannel kernel level network interface objects
+- 'sudo bash -s' so everything executes as root on the remote host
+```sh
+ssh node1 'sudo bash -s' <<'EOF'
+set -euo pipefail
+
+# --- Remove leftover Cilium interfaces (ignore if absent) ---
+ip link delete cilium_net 2>/dev/null || true
+ip link delete cilium_host 2>/dev/null || true
+ip link delete cilium_vxlan 2>/dev/null || true
+
+# --- Remove leftover Flannel/CNI interfaces (ignore if absent) ---
+ip link delete flannel.1 2>/dev/null || true
+ip link delete cni0 2>/dev/null || true
+
+# --- Clear CNI config + state ---
+rm -rf /etc/cni/net.d/*
+rm -rf /var/lib/cni/*
+
+# --- Ensure required kernel modules ---
+modprobe br_netfilter || true
+
+# --- Sysctls for Kubernetes networking ---
+cat >/etc/sysctl.d/k8s.conf <<'SYSCTL'
+net.bridge.bridge-nf-call-iptables=1
+net.bridge.bridge-nf-call-ip6tables=1
+net.ipv4.ip_forward=1
+SYSCTL
+
+sysctl --system
+
+# --- Restart services ---
+systemctl restart containerd || true
+systemctl restart kubelet
+
+echo "Done. Current links:"
+ip -br link | sed 's/^/  /'
+EOF
+
 ```
 
-#### 4.2 Install Cilium to Cluster
+#### 4.2 Install Flannel CNI
 
 ```bash
-cilium install --version 1.16.5
+# CKA exam-style approach (kubectl only, no external CLIs)
+kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
 ```
 
-#### 4.3 Verify Cilium
+**What this creates:**
+- Namespace: `kube-flannel`
+- ServiceAccount: `flannel`
+- ClusterRole/ClusterRoleBinding: RBAC for flannel
+- ConfigMap: `kube-flannel-cfg` (network config)
+- DaemonSet: `kube-flannel-ds` (runs on all nodes)
+
+**CKA Exam Knowledge: How CNI Works**
+1. **CNI config file** created in `/etc/cni/net.d/` (tells kubelet which CNI to use)
+2. **CNI DaemonSet pods** run on every node (allocate IPs, create routes)
+3. **Kubelet** calls CNI plugin when creating/deleting pods
+4. **Pods** get IP addresses from CNI IPAM (IP Address Management)
+
+#### 4.3 Watch Flannel Deployment
 
 ```bash
-cilium status --wait
+# CKA Troubleshooting Pattern: Watch pods deploy
+kubectl get pods -n kube-flannel -w
 
-kubectl get pods -n kube-system -l k8s-app=cilium
-# Expected: cilium-xxx Running
+# Expected sequence:
+# kube-flannel-ds-xxxxx   0/1   Init:0/2            (installing CNI binaries)
+# kube-flannel-ds-xxxxx   0/1   Init:1/2            (installing CNI config)
+# kube-flannel-ds-xxxxx   0/1   PodInitializing     (starting main container)
+# kube-flannel-ds-xxxxx   1/1   Running             (CNI operational)
 ```
 
-#### 4.4 Verify Node Status
+#### 4.4 Verify CNI Installation (CKA Troubleshooting Checklist)
 
 ```bash
+# 1. Check Flannel pods running
+kubectl get pods -n kube-flannel
+# Should see: kube-flannel-ds-xxxxx   1/1   Running
+
+# 2. Check CNI config created
+ssh node1 'ls /etc/cni/net.d/'
+# Should see: 10-flannel.conflist
+
+# 3. Check CoreDNS now running (proves networking works)
+kubectl get pods -n kube-system -l k8s-app=kube-dns
+# Should see: coredns-xxx   1/1   Running (not Pending/ContainerCreating)
+
+# 4. Check node status
 kubectl get nodes
-# Expected: node-1 Ready
+# Expected: node-1   Ready   control-plane
+
+# 5. Test pod networking (CKA exam verification)
+kubectl run test-dns --image=busybox:1.28 --rm -it --restart=Never -- nslookup kubernetes.default
+# Should resolve to 10.43.0.1 (service CIDR)
+```
+
+**CKA Troubleshooting: If CoreDNS Still Pending**
+
+```bash
+# Check CNI pod logs
+kubectl logs -n kube-flannel kube-flannel-ds-xxxxx
+
+# Check kubelet logs on node
+ssh node1 'sudo journalctl -u kubelet -n 50 | grep -i cni'
+
+# Check for CNI config
+ssh node1 'cat /etc/cni/net.d/10-flannel.conflist'
+
+# Common issues:
+# - Flannel pod CrashLooping → Check pod logs
+# - No CNI config file → DaemonSet pod didn't run init containers
+# - Node still NotReady → Give it 30 seconds, CNI takes time to initialize
+#  When pods won't start (ContainerCreating):
+
+#   1. ✓ Check CNI pods running: kubectl get pods -n kube-flannel
+#   2. ✓ Check subnet file: cat /run/flannel/subnet.env
+#   3. ✗ Check CNI config: ls /etc/cni/net.d/  ← YOU FOUND THE ISSUE HERE!
+#   4. Check kubelet logs: journalctl -u kubelet | grep cni
+#   5. Restart CNI pods if needed
+
+#   Memorize this order for the exam!
+
+#   ---
+#   Run This Now:
+
+#   # Restart Flannel pod to recreate CNI config
+#   kubectl delete pod -n kube-flannel kube-flannel-ds-v4qrr
+
+#   # Watch it restart
+#   kubectl get pods -n kube-flannel -w
+#   # (Ctrl+C after it shows Running)
+
+#   # Immediately check if CNI config was created
+#   ssh node1 'ls -la /etc/cni/net.d/'
+
+#   # If config exists, watch CoreDNS start
+#   kubectl get pods -n kube-system -w
 ```
 
 ---
@@ -278,6 +476,12 @@ kubectl get nodes
 ssh node1 'sudo kubeadm token create --print-join-command'
 # Copy the output
 ```
+or
+```sh
+JOIN_CMD=$(ssh node1 'sudo -n kubeadm token create --print-join-command')
+TOKEN=$(sed -n 's/.*--token \([^ ]*\).*/\1/p' <<<"$JOIN_CMD")
+HASH=$(sed -n 's/.*--discovery-token-ca-cert-hash \([^ ]*\).*/\1/p' <<<"$JOIN_CMD")
+```
 
 #### 5.2 Join node-2
 
@@ -288,6 +492,14 @@ ssh node2 'sudo kubeadm join 10.0.0.102:6443 \
   --discovery-token-ca-cert-hash sha256:<hash> \
   --node-name=node-2'
 ```
+or
+```sh
+ssh node2 "sudo kubeadm join 10.0.0.102:6443 \
+  --token $TOKEN \
+  --discovery-token-ca-cert-hash $HASH \
+  --node-name=node-2"
+```
+
 
 #### 5.3 Verify Both Nodes Ready
 
@@ -300,20 +512,78 @@ kubectl get nodes
 
 ---
 
-### Phase 6: Install Storage Provisioner (10 minutes)
+### Phase 6: Storage Provisioning (SKIPPED - Flux Will Handle)
 
-**Option A: Rancher local-path-provisioner (same as K3S)**
+**CKA Domain 4 - Storage (10%)**
 
-```bash
-kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/v0.0.30/deploy/local-path-storage.yaml
+**Decision:** Skip manual storage provisioner installation. Flux GitOps will create PersistentVolumes from `infrastructure/storage/`.
 
-# Set as default StorageClass
-kubectl patch storageclass local-path -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+**Rationale:**
+- PV manifests already exist in Flux repo (`infrastructure/storage/`)
+- Flux will create them during Phase 9 (infrastructure reconciliation)
+- Avoids duplicate resource management (imperative vs declarative)
+- Follows GitOps best practice: single source of truth
+
+**What Flux Will Create:**
+
+```yaml
+# From infrastructure/storage/kustomization.yaml:
+resources:
+  - llama-pv.yaml    # 20GB for LLM models on Node 2
+  - loki-pv.yaml     # 200GB for Loki log storage on Node 2
+  - tempo-pv.yaml    # 50GB for Tempo trace storage on Node 2
 ```
 
-**Option B: Use existing /mnt/k8s-storage with manual PVs**
+**PV Configuration (Example: llama-pv.yaml):**
+- **storageClassName:** `local-storage` (no provisioner, static binding)
+- **path:** `/mnt/k8s-storage/models` (existing directory on node-2)
+- **nodeAffinity:** Tied to node-2 (where Samsung NVMe is mounted)
+- **reclaimPolicy:** Retain (data safe even if PVC deleted)
+- **accessMode:** ReadOnlyMany (multiple LLM pods can share)
 
-We'll create PVs pointing to existing directories (for Loki, Tempo, LLM models).
+**CKA Exam Knowledge: Static vs Dynamic Provisioning**
+
+| Static (Our Approach) | Dynamic |
+|----------------------|---------|
+| Admin creates PV manually | StorageClass + Provisioner create PV automatically |
+| PVC binds to existing PV | PVC triggers PV creation |
+| Good for: Local storage, NFS | Good for: Cloud storage (AWS EBS, GCE PD) |
+| **No provisioner needed** | Requires storage provisioner |
+
+**CKA Exam Scenario:** "Create a PV for local storage on node-2 at /data"
+- Answer: Create PV with `local:` volume type + nodeAffinity
+- **No StorageClass or provisioner needed for local volumes!**
+
+**Verification After Flux Bootstrap (Phase 9):**
+
+```bash
+# Check PVs created by Flux
+kubectl get pv
+# Expected:
+# NAME              CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      STORAGECLASS
+# llama-models-pv   20Gi       ROX            Retain           Available   local-storage
+# loki-pv           200Gi      RWO            Retain           Available   local-storage
+# tempo-pv          50Gi       RWO            Retain           Available   local-storage
+
+# Verify PVs point to correct paths on node-2
+kubectl describe pv llama-models-pv | grep -A 5 "Source:"
+# Expected:
+#   Source:
+#     Type:  LocalVolume
+#     Path:  /mnt/k8s-storage/models
+
+# Check node affinity
+kubectl get pv llama-models-pv -o jsonpath='{.spec.nodeAffinity}'
+# Should include: node-2
+```
+
+**Why This Approach Works:**
+1. Data already exists in `/mnt/k8s-storage/` from K3S cluster
+2. Flux creates PVs that point to existing data
+3. HelmReleases (Loki, Tempo) create PVCs that bind to these PVs
+4. Workloads mount existing data seamlessly (zero data migration!)
+
+**CKA Exam Tip:** On the exam, you might be asked to create PVs manually using `kubectl create -f pv.yaml`. Our Flux approach is GitOps-style (declarative), but the underlying concept is the same: PV → PVC binding based on storageClassName + capacity matching.
 
 ---
 
@@ -340,7 +610,7 @@ kubectl taint node node-2 heavy=true:NoSchedule
 
 ```bash
 flux check --pre
-# Should pass with Kubernetes 1.31
+# Should pass with Kubernetes 1.35.0 >=1.32.0-0
 ```
 
 #### 8.2 Bootstrap Flux

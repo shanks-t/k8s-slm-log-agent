@@ -84,7 +84,8 @@
       "Bash(git pull:*)",
       "Bash(while kubectl get ns flux-system)",
       "Bash(do echo \"Waiting for namespace to terminate...\")",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(kubectl version:*)"
     ],
     "deny": [],
     "ask": []
