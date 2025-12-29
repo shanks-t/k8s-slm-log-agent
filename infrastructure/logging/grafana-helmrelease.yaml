@@ -2,7 +2,7 @@
 # HelmRelease for Grafana dashboarding and visualization
 # Manages: Dashboards, datasources, and UI
 # Deployed on: Node 1 (light hardware)
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: grafana

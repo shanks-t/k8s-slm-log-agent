@@ -2,7 +2,7 @@
 # HelmRelease for Envoy Gateway ingress controller
 # Manages: API Gateway, HTTPRoutes, and ingress traffic
 # Deployed on: Default (no node selector, runs on Node 1)
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: eg

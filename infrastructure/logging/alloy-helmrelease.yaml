@@ -2,7 +2,7 @@
 # HelmRelease for Grafana Alloy log collection
 # Manages: Log collection from all pods (DaemonSet)
 # Deployed on: Both nodes (DaemonSet runs on every node)
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: alloy

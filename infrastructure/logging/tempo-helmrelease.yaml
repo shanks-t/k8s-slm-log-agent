@@ -2,7 +2,7 @@
 # HelmRelease for Tempo distributed tracing backend
 # Manages: Trace storage, indexing, and querying
 # Deployed on: Node 2 (heavy hardware)
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: tempo
