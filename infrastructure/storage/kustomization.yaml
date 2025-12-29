@@ -8,4 +8,4 @@ resources:
   - llama-pv.yaml            # 20GB for LLM models on Node 2
   - loki-pv.yaml             # 200GB for Loki log storage on Node 2
   - tempo-pv.yaml            # 50GB for Tempo trace storage on Node 2
-  - tempo-pvc.yaml           # PVC for Tempo
+  # Note: Tempo PVC is auto-created by StatefulSet volumeClaimTemplates

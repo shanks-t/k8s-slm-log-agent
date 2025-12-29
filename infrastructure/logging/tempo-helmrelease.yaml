@@ -40,14 +40,13 @@ spec:
         value: "true"
         effect: NoSchedule
 
-    # Persistent storage (uses existing PVC created separately)
+    # Persistent storage (auto-created via StatefulSet volumeClaimTemplates)
     persistence:
       enabled: true
       storageClassName: local-storage
       accessModes:
         - ReadWriteOnce
       size: 50Gi
-      existingClaim: tempo-pvc  # References PVC in infrastructure/storage/
 
     # Service configuration
     service:
