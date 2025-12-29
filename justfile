@@ -7,7 +7,14 @@ dev_pids := ".dev-pids"
 # Default recipe runs dev
 default: dev
 
-# Start the development environment
+# Start local development environment
+#
+# Port-forwards Kubernetes services (Loki, LLaMA, Tempo) to localhost,
+# then runs FastAPI locally on your Mac with hot-reload enabled.
+#
+# Network flow: Mac FastAPI → localhost ports → K8s services
+# Use case: Local development with fast iteration
+# Stop with: Ctrl+C or 'just stop'
 dev: stop
     #!/usr/bin/env bash
     set -euo pipefail
@@ -37,7 +44,10 @@ dev: stop
     cd workloads/log-analyzer
     uv run fastapi dev src/log_analyzer/main.py
 
-# Stop all dev processes
+# Stop all background development processes
+#
+# Kills port-forward processes started by 'just dev' or 'just dev-k8s'.
+# Safe to run even if nothing is running.
 stop:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -55,43 +65,51 @@ stop:
     # Remove runtime state
     rm -f {{dev_pids}}
 
-# Run unit tests (fast, mocked dependencies)
+# Run unit tests with mocked dependencies
+#
+# Fast tests that don't require Kubernetes services.
+# Dependencies are mocked (Loki, LLaMA).
 test:
     @echo "Running unit tests..."
     @cd workloads/log-analyzer && uv run pytest -v
 
-# Run integration tests (requires services running via 'just dev')
+# Run integration tests against real Kubernetes services
+#
+# Requires: 'just dev' running in another terminal
+# Tests use real Loki, LLaMA services via port-forward.
 test-int:
     @echo "Running integration tests..."
     @cd workloads/log-analyzer && uv run pytest -m integration -v
 
 # Run all tests (unit + integration)
+#
+# Requires: 'just dev' running in another terminal
 test-all:
     @echo "Running all tests..."
     @cd workloads/log-analyzer && uv run pytest -m "" -v
 
-# Test the streaming analyze endpoint with optional namespace filter (local dev)
-test-stream namespace="kube-system":
-    #!/usr/bin/env bash
-    set -euo pipefail
 
-    START=$(date -u -v-24H +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
-    END=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+# Test LOCAL FastAPI server with Kubernetes dependencies
+#
+# Requires: 'just dev' running in another terminal
+# Network flow: Mac curl → Mac FastAPI (localhost:8000) → K8s services
+# Use case: Test local code changes with real K8s data
+#
+# Examples:
+#   just test-stream llm 30m          # Last 30 minutes of llm namespace
+#   just test-stream kube-system 24h  # Last 24 hours of kube-system
+test-stream namespace="kube-system" duration="24h":
+    @helpers/test-stream.sh {{namespace}} {{duration}}
 
-    curl -N -X POST http://127.0.0.1:8000/v1/analyze/stream \
-      -H "Content-Type: application/json" \
-      -d "{
-        \"time_range\": {
-          \"start\": \"$START\",
-          \"end\": \"$END\"
-        },
-        \"filters\": {
-          \"namespace\": \"{{namespace}}\"
-        },
-        \"limit\": 2
-      }"
-
-# Port-forward log-analyzer service from Kubernetes
+# Port-forward DEPLOYED log-analyzer service to localhost
+#
+# Makes the Kubernetes-deployed log-analyzer accessible at localhost:8000.
+# FastAPI runs IN Kubernetes, not on your Mac.
+# Keeps port-forward open until you press Ctrl+C.
+#
+# Network flow: Mac → localhost:8000 → port-forward → K8s log-analyzer
+# Use case: Interactive debugging, multiple manual curl requests
+# Note: For one-off tests, use 'just test-k8s-local' (auto-cleanup)
 dev-k8s: stop-k8s
     #!/usr/bin/env bash
     set -euo pipefail
@@ -111,6 +129,9 @@ dev-k8s: stop-k8s
     wait
 
 # Stop Kubernetes port-forwards
+#
+# Stops port-forward created by 'just dev-k8s'.
+# Safe to run even if nothing is running.
 stop-k8s:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -125,48 +146,51 @@ stop-k8s:
     fi
     rm -f {{dev_pids}}
 
-# Test the Kubernetes-deployed log-analyzer service
-test-k8s namespace="log-analyzer":
-    #!/usr/bin/env bash
-    set -euo pipefail
+# Test DEPLOYED log-analyzer with end-to-end Kubernetes networking
+#
+# Creates a temporary curl pod INSIDE Kubernetes to test the service.
+# Tests full production-like path: K8s DNS, ClusterIP, network policies.
+#
+# Network flow: curl pod (in K8s) → K8s service DNS → log-analyzer pod
+# Use case: Validate deployment, pre-commit checks, CI/CD
+# Note: Slower (~5-10s) due to pod creation/deletion
+#
+# Examples:
+#   just test-k8s llm                      # Last 1 hour (default)
+#   just test-k8s llm 30m                  # Last 30 minutes
+#   just test-k8s namespace=llm duration=24h
+test-k8s namespace="log-analyzer" duration="1h":
+    @helpers/test-k8s.sh {{namespace}} {{duration}}
 
-    START=$(date -u -v-1H +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%SZ)
-    END=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+# Test DEPLOYED log-analyzer via port-forward from your Mac
+#
+# Self-contained: Sets up port-forward, runs test, cleans up automatically.
+# Network flow: Mac curl → localhost:8000 → port-forward → K8s log-analyzer
+# Use case: Quick testing of deployed service without manual port-forward management
+#
+# Examples:
+#   just test-k8s-local llm                      # Last 1 hour (default)
+#   just test-k8s-local llm 30m                  # Last 30 minutes
+#   just test-k8s-local namespace=llm duration=24h
+test-k8s-local namespace="log-analyzer" duration="1h":
+    @helpers/test-k8s-local.sh {{namespace}} {{duration}}
 
-    echo "Testing log-analyzer in Kubernetes (namespace: {{namespace}})..."
-
-    # Test via kubectl run to call from inside the cluster
-    kubectl run test-log-analyzer --rm -i --tty --image=curlimages/curl --restart=Never -- \
-      curl -N -X POST "http://log-analyzer.log-analyzer.svc.cluster.local:8000/v1/analyze/stream" \
-      -H "Content-Type: application/json" \
-      -d "{
-        \"time_range\": {
-          \"start\": \"$START\",
-          \"end\": \"$END\"
-        },
-        \"filters\": {
-          \"namespace\": \"{{namespace}}\"
-        },
-        \"limit\": 15
-      }"
-
-# Test the Kubernetes service via port-forward (requires 'just dev-k8s' running)
-test-k8s-local namespace="log-analyzer":
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    START=$(date -u -v-1H +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%SZ)
-    END=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-
-    curl -N -X POST http://127.0.0.1:8000/v1/analyze/stream \
-      -H "Content-Type: application/json" \
-      -d "{
-        \"time_range\": {
-          \"start\": \"$START\",
-          \"end\": \"$END\"
-        },
-        \"filters\": {
-          \"namespace\": \"{{namespace}}\"
-        },
-        \"limit\": 15
-      }"
+# Evaluate log-analyzer by comparing LLM analysis with raw Loki logs
+#
+# Queries both log-analyzer (LLM analysis) and Loki (raw logs) with identical
+# parameters, then saves outputs side-by-side for human or agent evaluation.
+#
+# Output: Creates tmp/evaluation-<timestamp>.json with:
+#   - query_params: The query used
+#   - llm_analysis: Just the LLM analysis text (from /v1/analyze endpoint)
+#   - raw_logs: What Loki returned (same query)
+#   - metadata: Timestamp, namespace, duration
+#   - comparison: Metrics for evaluation (log count, error detection, etc.)
+#
+# Use case: Validate LLM analysis quality, find missed logs, tune prompts
+#
+# Examples:
+#   just evaluate llm 30m              # Evaluate last 30 min of llm namespace
+#   just evaluate kube-system 1h       # Evaluate last 1 hour
+evaluate namespace="log-analyzer" duration="1h":
+    @uv run python helpers/evaluate.py {{namespace}} {{duration}}

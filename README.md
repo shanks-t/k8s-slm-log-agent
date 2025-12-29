@@ -36,12 +36,31 @@ Then cd into worktree and give your agent instructions! e.g.
 cd ../../k8s-slm-log-agent-wt-a
 git status
 ```
+When you are ready to push your changes from worktree to a remote branch:
+```sh
+cd <worktree>
+git add .
+git commit -m "Agent changes"
+git push -u origin agent/flux
+```
 
 ## Local Development
 
-This project uses `just` for local development workflows. All commands should be run from the repository root.
+This project uses [`just`](https://just.systems/) as a command runner for development workflows. Just is a modern alternative to Make, designed specifically for running project-specific commands. It provides a clean, ergonomic syntax and works consistently across platforms.
+
+### Why Just?
+
+- **Task runner, not a build system**: Unlike Make, `just` is designed for running commands, not tracking dependencies
+- **No tab vs space confusion**: Uses any whitespace for indentation
+- **Better error messages**: Clear, helpful output when things go wrong
+- **Cross-platform**: Works on Linux, macOS, and Windows
+- **Recipe parameters**: Support for default values and parameterized commands
+
+**Learn more:** [Just Programmer's Manual](https://just.systems/man/en/) | [Recipe Parameters](https://just.systems/man/en/recipe-parameters.html)
 
 ### Available Commands
+
+All commands should be run from the repository root:
 
 ```bash
 # Start development environment (port-forwards Loki and LLM services)
@@ -59,12 +78,35 @@ just test-int
 # Run all tests (unit + integration)
 just test-all
 
-# Test the streaming analyze endpoint
-just test-stream [namespace]
+# Test the streaming analyze endpoint (local dev)
+just test-stream [namespace] [duration]
+# Examples:
+#   just test-stream llm 30m          # Last 30 minutes of llm namespace logs
+#   just test-stream kube-system 24h  # Last 24 hours of kube-system logs
+
+# Test Kubernetes-deployed log-analyzer service
+just test-k8s [namespace] [duration]
+# Examples:
+#   just test-k8s llm                 # Last 1 hour (default)
+#   just test-k8s llm 30m             # Last 30 minutes
+#   just test-k8s namespace=llm duration=24h
+
+# Test via port-forward (self-contained, auto-cleanup)
+just test-k8s-local [namespace] [duration]
+# Examples:
+#   just test-k8s-local llm 30m       # Automatically sets up port-forward
+
+# Evaluate LLM analysis quality against raw logs
+just evaluate [namespace] [duration]
+# Examples:
+#   just evaluate llm 30m             # Compare LLM analysis with raw Loki logs
+#   just evaluate kube-system 1h      # Saves to tmp/evaluation-<timestamp>.json
 
 # List all available recipes
 just --list
 ```
+
+**Duration format**: Use format like `1h` (hours), `30m` (minutes), or `2d` (days)
 
 ### Development Workflow
 
