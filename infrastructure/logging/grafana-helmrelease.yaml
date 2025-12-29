@@ -33,6 +33,10 @@ spec:
     # Node placement: Run on Node 1 (light hardware)
     nodeSelector:
       hardware: light
+    tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
 
     # Resource limits (lightweight)
     resources:
