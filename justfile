@@ -194,3 +194,44 @@ test-k8s-local namespace="log-analyzer" duration="1h":
 #   just evaluate kube-system 1h       # Evaluate last 1 hour
 evaluate namespace="log-analyzer" duration="1h":
     @uv run python helpers/evaluate.py {{namespace}} {{duration}}
+
+# Build log-analyzer Docker image for linux/amd64
+#
+# Builds the container image locally using the Dockerfile in workloads/log-analyzer.
+# Tags with both 'latest' and git commit SHA for versioning.
+#
+# Requires: .env file with GITHUB_USER defined
+# Output: ghcr.io/${GITHUB_USER}/log-analyzer:latest and :${GIT_SHA}
+build:
+    @helpers/build.sh
+
+# Push log-analyzer image to GitHub Container Registry
+#
+# Authenticates with ghcr.io using GHCR_TOKEN from .env, then pushes
+# both the :latest and :${GIT_SHA} tagged images.
+#
+# Requires: .env file with GITHUB_USER and GHCR_TOKEN
+# Requires: 'just build' to have been run first
+push:
+    @helpers/push.sh
+
+# Deploy log-analyzer to Kubernetes via Flux
+#
+# Updates the deployment image to use the latest SHA, commits to Git,
+# and triggers Flux reconciliation.
+#
+# Requires: .env file with GITHUB_USER
+# Workflow: Updates deployment.yaml → git commit → git push → flux reconcile
+deploy:
+    @helpers/deploy.sh
+
+# Build, push, and deploy log-analyzer (full release workflow)
+#
+# Runs the complete workflow: build → push to ghcr.io → deploy via Flux
+#
+# Use case: Release a new version of log-analyzer
+# Example: just release
+release: build push deploy
+    @echo ""
+    @echo "✓ Release complete!"
+    @echo "Monitor deployment: kubectl get pods -n log-analyzer -w"
