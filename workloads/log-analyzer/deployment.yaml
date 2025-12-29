@@ -23,8 +23,10 @@ spec:
 
       containers:
       - name: log-analyzer
-        image: docker.io/library/log-analyzer:latest
-        imagePullPolicy: IfNotPresent
+        # TODO: Update with your GitHub username in .env, then run: just build push
+        # Image will be updated by 'just deploy' to use commit SHA
+        image: ghcr.io/shanks-tlog-analyzer:latest
+        imagePullPolicy: Always  # Always pull from ghcr.io for latest version
         ports:
         - containerPort: 8000
           name: http
