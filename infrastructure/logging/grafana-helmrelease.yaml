@@ -153,11 +153,27 @@ spec:
                 - name: trace_id
                   datasourceUid: tempo
 
-    # Dashboard providers (none for now, add via Flux later)
-    dashboardProviders: {}
+    # Dashboard providers - configure Grafana to load dashboards from ConfigMaps
+    dashboardProviders:
+      dashboardproviders.yaml:
+        apiVersion: 1
+        providers:
+          - name: 'default'
+            orgId: 1
+            folder: ''
+            type: file
+            disableDeletion: false
+            editable: true
+            options:
+              path: /var/lib/grafana/dashboards/default
 
-    # Dashboards (none for now, add via Flux later)
-    dashboards: {}
+    # Dashboards - mount ConfigMaps as dashboard files
+    dashboards:
+      default:
+        kubernetes-dashboard:
+          gnetId: 18283
+          revision: 1
+          datasource: Prometheus
 
     # Plugins (none for now, add via Flux later)
     plugins: []
