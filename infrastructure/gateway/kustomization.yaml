@@ -1,0 +1,11 @@
+---
+# Kustomization for Envoy Gateway configuration
+# Gateway resources, HTTPRoutes for ingress
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - 01-gatewayclass.yaml
+  - 02-envoy-proxy-config.yaml
+  - 03-gateway.yaml
+  - 04-test-httproute.yaml
+  - 05-grafana-httproute.yaml
