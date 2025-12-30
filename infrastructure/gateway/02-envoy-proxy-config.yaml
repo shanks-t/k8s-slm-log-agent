@@ -17,6 +17,9 @@ spec:
       # Configure the Service that exposes Envoy Proxy
       envoyService:
         type: LoadBalancer
+        # Use Cluster mode so NodePort works on all nodes (not just where pod runs)
+        # This is important for homelab setups without a real LoadBalancer
+        externalTrafficPolicy: Cluster
 
       # Configure the Deployment for Envoy Proxy pods
       envoyDeployment:
@@ -29,6 +32,12 @@ spec:
           # This aligns with your architecture: lightweight services on Node 1
           nodeSelector:
             hardware: light
+
+          # Tolerate control-plane taint so it can run on node-1
+          tolerations:
+            - key: node-role.kubernetes.io/control-plane
+              operator: Exists
+              effect: NoSchedule
 
           # Annotations for the pods (optional, for observability later)
           annotations:
