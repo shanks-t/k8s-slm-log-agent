@@ -168,12 +168,17 @@ spec:
               path: /var/lib/grafana/dashboards/default
 
     # Dashboards - mount ConfigMaps as dashboard files
+    # Map datasource template variables to our Prometheus datasource
     dashboards:
       default:
         kubernetes-dashboard:
           gnetId: 18283
           revision: 1
-          datasource: Prometheus
+          datasource:
+            - name: DS_SERVICEMONITOR
+              value: Prometheus
+            - name: DS_PROMETHEUS
+              value: Prometheus
 
     # Plugins (none for now, add via Flux later)
     plugins: []
