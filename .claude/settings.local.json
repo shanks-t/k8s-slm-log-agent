@@ -87,7 +87,9 @@
       "Bash(done)",
       "Bash(kubectl version:*)",
       "Bash(kubectl taint:*)",
-      "Bash(git config:*)"
+      "Bash(git config:*)",
+      "Bash(source .env)",
+      "Bash(helpers/push.sh)"
     ],
     "deny": [],
     "ask": []
