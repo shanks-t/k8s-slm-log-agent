@@ -60,6 +60,25 @@ Only write complete implementations when user says:
 
 Otherwise: explain, guide, ask questions, provide pseudocode or structure.
 
+## Development Environment
+
+This repository uses **uv** (modern Python package manager) for dependency management:
+
+- **Running Python scripts**: Use `uv run python <script.py>` instead of `python3`
+- **Dependencies**: Defined in `pyproject.toml` at repository root
+- **Evaluation scripts**: Located in `evals/` directory, use `uv run python` for execution
+- **Installing dependencies**: Run `uv sync` to install/update all dependencies
+
+Example:
+```bash
+# Run evaluation extraction script
+cd evals
+uv run python extract_golden_dataset.py
+
+# Install/update all dependencies
+uv sync
+```
+
 # Homelab Log Intelligence Platform — Project Goals & Architecture
 
 This document describes the high-level goals, architectural principles, and learning approach for building a Kubernetes-based log intelligence system.
