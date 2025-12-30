@@ -1,8 +1,0 @@
-namespace/default
-namespace/envoy-gateway-system
-namespace/kube-node-lease
-namespace/kube-public
-namespace/kube-system
-namespace/llm
-namespace/log-analyzer
-namespace/logging
