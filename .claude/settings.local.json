@@ -91,7 +91,13 @@
       "Bash(source .env)",
       "Bash(helpers/push.sh)",
       "Bash(just evaluate)",
-      "Bash(xargs:*)"
+      "Bash(xargs:*)",
+      "Bash(kubectl top:*)",
+      "Bash(pkill:*)",
+      "Bash(git merge:*)",
+      "Bash(git checkout:*)",
+      "Bash(jq:*)",
+      "Bash(kubectl create:*)"
     ],
     "deny": [],
     "ask": []
