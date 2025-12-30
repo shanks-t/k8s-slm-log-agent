@@ -193,7 +193,7 @@ test-k8s-local namespace="log-analyzer" duration="1h":
 #   just evaluate llm 30m              # Evaluate last 30 min of llm namespace
 #   just evaluate kube-system 1h       # Evaluate last 1 hour
 evaluate namespace="log-analyzer" duration="1h":
-    @uv run python helpers/evaluate.py {{namespace}} {{duration}}
+    @uv run python just-helpers/evaluate.py {{namespace}} {{duration}}
 
 # Build log-analyzer Docker image for linux/amd64
 #
