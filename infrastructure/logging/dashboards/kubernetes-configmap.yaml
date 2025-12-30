@@ -1,70 +1,20 @@
 ---
-# ConfigMap containing fixed Kubernetes Dashboard (18283)
-# Fixed template variables to use cAdvisor metrics instead of kube-state-metrics
-# Variables updated:
-#   - namespace: label_values(container_cpu_usage_seconds_total, namespace)
-#   - pod: label_values(container_cpu_usage_seconds_total{namespace="$namespace"}, pod)
+# Grafana Dashboard ConfigMap: kubernetes
+# Auto-generated from Grafana UI export
+#
+# This dashboard is automatically loaded by the Grafana sidecar container.
+# The 'grafana_dashboard: "1"' label enables automatic discovery.
+#
+# To update this dashboard:
+#   1. Edit in Grafana UI
+#   2. Export JSON to tmp/dashboard.json
+#   3. Run: just dashboard-cm kubernetes
+#   4. Apply: kubectl apply -f infrastructure/logging/dashboards/kubernetes-configmap.yaml
+#   5. Commit to Git for persistence
 apiVersion: v1
 data:
   kubernetes-dashboard.json: |
     {
-      "__inputs": [
-        {
-          "name": "DS_SERVICEMONITOR",
-          "label": "cadvisor",
-          "description": "",
-          "type": "datasource",
-          "pluginId": "prometheus",
-          "pluginName": "Prometheus"
-        },
-        {
-          "name": "DS_PROMETHEUS",
-          "label": "Prometheus",
-          "description": "",
-          "type": "datasource",
-          "pluginId": "prometheus",
-          "pluginName": "Prometheus"
-        }
-      ],
-      "__elements": {},
-      "__requires": [
-        {
-          "type": "panel",
-          "id": "bargauge",
-          "name": "Bar gauge",
-          "version": ""
-        },
-        {
-          "type": "grafana",
-          "id": "grafana",
-          "name": "Grafana",
-          "version": "9.1.0"
-        },
-        {
-          "type": "panel",
-          "id": "piechart",
-          "name": "Pie chart",
-          "version": ""
-        },
-        {
-          "type": "datasource",
-          "id": "prometheus",
-          "name": "Prometheus",
-          "version": "1.0.0"
-        },
-        {
-          "type": "panel",
-          "id": "stat",
-          "name": "Stat",
-          "version": ""
-        },
-        {
-          "type": "panel",
-          "id": "timeseries",
-          "name": "Time series",
-          "version": ""
-        }
-      ],
       "annotations": {
         "list": [
           {
@@ -91,14 +41,13 @@ data:
       "editable": true,
       "fiscalYearStartMonth": 0,
       "graphTooltip": 0,
-      "id": null,
+      "id": 1,
       "links": [],
-      "liveNow": false,
       "panels": [
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_SERVICEMONITOR}"
+            "uid": "Prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -113,7 +62,7 @@ data:
                 "steps": [
                   {
                     "color": "green",
-                    "value": null
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -134,24 +83,32 @@ data:
           "id": 35,
           "options": {
             "displayMode": "lcd",
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": false
+            },
+            "maxVizHeight": 300,
             "minVizHeight": 10,
             "minVizWidth": 0,
+            "namePlacement": "auto",
             "orientation": "horizontal",
             "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
+              "calcs": ["lastNotNull"],
               "fields": "",
               "values": false
             },
-            "showUnfilled": true
+            "showUnfilled": true,
+            "sizing": "auto",
+            "valueMode": "color"
           },
-          "pluginVersion": "9.1.0",
+          "pluginVersion": "12.3.0",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "code",
               "exemplar": true,
@@ -164,7 +121,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "code",
               "expr": "sum(kube_pod_container_resource_requests{unit=\"core\"}) / sum(machine_cpu_cores)",
@@ -176,7 +133,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "code",
               "expr": "sum(kube_pod_container_resource_limits{unit=\"core\"}) / sum(machine_cpu_cores)",
@@ -192,7 +149,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_SERVICEMONITOR}"
+            "uid": "Prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -208,7 +165,7 @@ data:
                 "steps": [
                   {
                     "color": "green",
-                    "value": null
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -229,25 +186,33 @@ data:
           "id": 37,
           "options": {
             "displayMode": "lcd",
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": false
+            },
+            "maxVizHeight": 300,
             "minVizHeight": 10,
             "minVizWidth": 0,
+            "namePlacement": "auto",
             "orientation": "horizontal",
             "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
+              "calcs": ["lastNotNull"],
               "fields": "",
               "values": false
             },
             "showUnfilled": true,
-            "text": {}
+            "sizing": "auto",
+            "text": {},
+            "valueMode": "color"
           },
-          "pluginVersion": "9.1.0",
+          "pluginVersion": "12.3.0",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "code",
               "exemplar": true,
@@ -260,7 +225,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "code",
               "expr": "sum(kube_pod_container_resource_requests{unit=\"byte\"}) / sum(machine_memory_bytes)",
@@ -272,7 +237,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "code",
               "expr": "sum(kube_pod_container_resource_limits{unit=\"byte\"}) / sum(machine_memory_bytes)",
@@ -288,7 +253,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_SERVICEMONITOR}"
+            "uid": "Prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -299,7 +264,7 @@ data:
                 "steps": [
                   {
                     "color": "blue",
-                    "value": null
+                    "value": 0
                   }
                 ]
               }
@@ -318,22 +283,23 @@ data:
             "graphMode": "none",
             "justifyMode": "auto",
             "orientation": "auto",
+            "percentChangeColorMode": "standard",
             "reduceOptions": {
-              "calcs": [
-                "last"
-              ],
+              "calcs": ["last"],
               "fields": "",
               "values": false
             },
+            "showPercentChange": false,
             "text": {},
-            "textMode": "value"
+            "textMode": "value",
+            "wideLayout": true
           },
-          "pluginVersion": "9.1.0",
+          "pluginVersion": "12.3.0",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "exemplar": true,
               "expr": "count(up{job=\"node-exporter\"})",
@@ -348,7 +314,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_SERVICEMONITOR}"
+            "uid": "Prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -375,36 +341,32 @@ data:
           },
           "id": 24,
           "options": {
-            "displayLabels": [
-              "value"
-            ],
+            "displayLabels": ["value"],
             "legend": {
               "displayMode": "table",
               "placement": "right",
               "showLegend": true,
-              "values": [
-                "value"
-              ]
+              "values": ["value"]
             },
             "pieType": "donut",
             "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
+              "calcs": ["lastNotNull"],
               "fields": "",
               "values": false
             },
+            "sort": "desc",
             "tooltip": {
+              "hideZeros": false,
               "mode": "multi",
               "sort": "desc"
             }
           },
-          "pluginVersion": "9.1.0",
+          "pluginVersion": "12.3.0",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "builder",
               "expr": "count by(namespace) (rate(kube_pod_container_status_running{namespace=~\"$namespace\"}[$__rate_interval]))",
@@ -419,7 +381,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_SERVICEMONITOR}"
+            "uid": "Prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -430,7 +392,7 @@ data:
                 "steps": [
                   {
                     "color": "blue",
-                    "value": null
+                    "value": 0
                   }
                 ]
               }
@@ -449,22 +411,23 @@ data:
             "graphMode": "none",
             "justifyMode": "auto",
             "orientation": "auto",
+            "percentChangeColorMode": "standard",
             "reduceOptions": {
-              "calcs": [
-                "last"
-              ],
+              "calcs": ["last"],
               "fields": "",
               "values": false
             },
+            "showPercentChange": false,
             "text": {},
-            "textMode": "value"
+            "textMode": "value",
+            "wideLayout": true
           },
-          "pluginVersion": "9.1.0",
+          "pluginVersion": "12.3.0",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "expr": "count(kube_namespace_created)",
               "interval": "",
@@ -478,7 +441,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_SERVICEMONITOR}"
+            "uid": "Prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -489,7 +452,7 @@ data:
                 "steps": [
                   {
                     "color": "rgb(255, 255, 255)",
-                    "value": null
+                    "value": 0
                   }
                 ]
               },
@@ -509,22 +472,23 @@ data:
             "graphMode": "none",
             "justifyMode": "center",
             "orientation": "auto",
+            "percentChangeColorMode": "standard",
             "reduceOptions": {
-              "calcs": [
-                "mean"
-              ],
+              "calcs": ["mean"],
               "fields": "",
               "values": false
             },
+            "showPercentChange": false,
             "text": {},
-            "textMode": "auto"
+            "textMode": "auto",
+            "wideLayout": true
           },
-          "pluginVersion": "9.1.0",
+          "pluginVersion": "12.3.0",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "code",
               "exemplar": true,
@@ -537,7 +501,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "code",
               "expr": "sum(kube_pod_container_resource_requests{unit=\"core\"})",
@@ -549,7 +513,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "code",
               "expr": "sum(kube_pod_container_resource_limits{unit=\"core\"})",
@@ -561,7 +525,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "code",
               "expr": "sum(machine_cpu_cores)",
@@ -577,7 +541,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_SERVICEMONITOR}"
+            "uid": "Prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -588,7 +552,7 @@ data:
                 "steps": [
                   {
                     "color": "rgb(255, 255, 255)",
-                    "value": null
+                    "value": 0
                   }
                 ]
               },
@@ -608,22 +572,23 @@ data:
             "graphMode": "none",
             "justifyMode": "auto",
             "orientation": "auto",
+            "percentChangeColorMode": "standard",
             "reduceOptions": {
-              "calcs": [
-                "mean"
-              ],
+              "calcs": ["mean"],
               "fields": "",
               "values": false
             },
+            "showPercentChange": false,
             "text": {},
-            "textMode": "auto"
+            "textMode": "auto",
+            "wideLayout": true
           },
-          "pluginVersion": "9.1.0",
+          "pluginVersion": "12.3.0",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "code",
               "exemplar": true,
@@ -636,7 +601,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "code",
               "expr": "sum(kube_pod_container_resource_requests{unit=\"byte\"})",
@@ -648,7 +613,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "code",
               "expr": "sum(kube_pod_container_resource_limits{unit=\"byte\"})",
@@ -660,7 +625,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "code",
               "expr": "sum(machine_memory_bytes)",
@@ -676,7 +641,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_SERVICEMONITOR}"
+            "uid": "Prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -687,7 +652,7 @@ data:
                 "steps": [
                   {
                     "color": "blue",
-                    "value": null
+                    "value": 0
                   }
                 ]
               }
@@ -706,22 +671,23 @@ data:
             "graphMode": "none",
             "justifyMode": "auto",
             "orientation": "auto",
+            "percentChangeColorMode": "standard",
             "reduceOptions": {
-              "calcs": [
-                "last"
-              ],
+              "calcs": ["last"],
               "fields": "",
               "values": false
             },
+            "showPercentChange": false,
             "text": {},
-            "textMode": "value"
+            "textMode": "value",
+            "wideLayout": true
           },
-          "pluginVersion": "9.1.0",
+          "pluginVersion": "12.3.0",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "expr": "sum(kube_pod_status_phase{phase='Running'})",
               "interval": "",
@@ -735,7 +701,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_SERVICEMONITOR}"
+            "uid": "Prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -750,7 +716,7 @@ data:
                 "steps": [
                   {
                     "color": "green",
-                    "value": null
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -771,24 +737,32 @@ data:
           "id": 2,
           "options": {
             "displayMode": "lcd",
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": false
+            },
+            "maxVizHeight": 300,
             "minVizHeight": 10,
             "minVizWidth": 0,
+            "namePlacement": "auto",
             "orientation": "horizontal",
             "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
+              "calcs": ["lastNotNull"],
               "fields": "",
               "values": false
             },
-            "showUnfilled": true
+            "showUnfilled": true,
+            "sizing": "auto",
+            "valueMode": "color"
           },
-          "pluginVersion": "9.1.0",
+          "pluginVersion": "12.3.0",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "code",
               "expr": "avg(1-rate(node_cpu_seconds_total{mode=\"idle\", job=\"node-exporter\"}[$__rate_interval]))",
@@ -803,7 +777,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_SERVICEMONITOR}"
+            "uid": "Prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -818,7 +792,7 @@ data:
                 "steps": [
                   {
                     "color": "green",
-                    "value": null
+                    "value": 0
                   },
                   {
                     "color": "#EAB839",
@@ -843,24 +817,32 @@ data:
           "id": 4,
           "options": {
             "displayMode": "lcd",
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": false
+            },
+            "maxVizHeight": 300,
             "minVizHeight": 10,
             "minVizWidth": 0,
+            "namePlacement": "auto",
             "orientation": "horizontal",
             "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
+              "calcs": ["lastNotNull"],
               "fields": "",
               "values": false
             },
-            "showUnfilled": true
+            "showUnfilled": true,
+            "sizing": "auto",
+            "valueMode": "color"
           },
-          "pluginVersion": "9.1.0",
+          "pluginVersion": "12.3.0",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "code",
               "expr": "sum(node_memory_MemTotal_bytes{job=\"node-exporter\"} - node_memory_MemAvailable_bytes{job=\"node-exporter\"}) / sum(node_memory_MemTotal_bytes{job=\"node-exporter\"})",
@@ -875,7 +857,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_SERVICEMONITOR}"
+            "uid": "Prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -883,11 +865,13 @@ data:
                 "mode": "palette-classic"
               },
               "custom": {
+                "axisBorderShow": false,
                 "axisCenteredZero": false,
                 "axisColorMode": "text",
                 "axisLabel": "BANDWIDTH",
                 "axisPlacement": "auto",
                 "barAlignment": 0,
+                "barWidthFactor": 0.6,
                 "drawStyle": "line",
                 "fillOpacity": 25,
                 "gradientMode": "opacity",
@@ -896,6 +880,7 @@ data:
                   "tooltip": false,
                   "viz": false
                 },
+                "insertNulls": false,
                 "lineInterpolation": "smooth",
                 "lineWidth": 2,
                 "pointSize": 5,
@@ -903,6 +888,7 @@ data:
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": true,
                 "stacking": {
                   "group": "A",
@@ -919,7 +905,7 @@ data:
                 "steps": [
                   {
                     "color": "green",
-                    "value": null
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -940,23 +926,23 @@ data:
           "id": 18,
           "options": {
             "legend": {
-              "calcs": [
-                "lastNotNull"
-              ],
+              "calcs": ["lastNotNull"],
               "displayMode": "list",
               "placement": "right",
               "showLegend": true
             },
             "tooltip": {
+              "hideZeros": false,
               "mode": "multi",
               "sort": "desc"
             }
           },
+          "pluginVersion": "12.3.0",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "builder",
               "expr": "sum by(id) (rate(container_network_receive_bytes_total{instance=~\".+\", id=\"/\", interface=~\".+\"}[$__rate_interval]))",
@@ -967,7 +953,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "builder",
               "expr": "sum by(id) (rate(container_network_transmit_bytes_total{instance=~\".+\", id=\"/\", interface=~\".+\"}[$__rate_interval]))",
@@ -983,7 +969,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_SERVICEMONITOR}"
+            "uid": "Prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -992,11 +978,13 @@ data:
                 "seriesBy": "max"
               },
               "custom": {
+                "axisBorderShow": false,
                 "axisCenteredZero": false,
                 "axisColorMode": "text",
                 "axisLabel": "Bytes per second",
                 "axisPlacement": "auto",
                 "barAlignment": 0,
+                "barWidthFactor": 0.6,
                 "drawStyle": "line",
                 "fillOpacity": 25,
                 "gradientMode": "opacity",
@@ -1005,6 +993,7 @@ data:
                   "tooltip": false,
                   "viz": false
                 },
+                "insertNulls": false,
                 "lineInterpolation": "smooth",
                 "lineStyle": {
                   "fill": "solid"
@@ -1015,6 +1004,7 @@ data:
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": true,
                 "stacking": {
                   "group": "A",
@@ -1030,7 +1020,7 @@ data:
                 "steps": [
                   {
                     "color": "green",
-                    "value": null
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -1057,15 +1047,17 @@ data:
               "showLegend": true
             },
             "tooltip": {
+              "hideZeros": false,
               "mode": "multi",
               "sort": "desc"
             }
           },
+          "pluginVersion": "12.3.0",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "builder",
               "expr": "sum by(device) (rate(node_disk_read_bytes_total{device=\"sda\", instance=~\".+\"}[$__rate_interval]))",
@@ -1077,7 +1069,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "code",
               "expr": "sum by(device) (rate(node_disk_written_bytes_total{device=\"sda\", instance=~\".+\"}[$__rate_interval]))",
@@ -1105,7 +1097,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_SERVICEMONITOR}"
+            "uid": "Prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -1113,11 +1105,13 @@ data:
                 "mode": "palette-classic"
               },
               "custom": {
+                "axisBorderShow": false,
                 "axisCenteredZero": false,
                 "axisColorMode": "text",
                 "axisLabel": "CPU Cores",
                 "axisPlacement": "auto",
                 "barAlignment": 0,
+                "barWidthFactor": 0.6,
                 "drawStyle": "line",
                 "fillOpacity": 25,
                 "gradientMode": "opacity",
@@ -1126,6 +1120,7 @@ data:
                   "tooltip": false,
                   "viz": false
                 },
+                "insertNulls": false,
                 "lineInterpolation": "linear",
                 "lineWidth": 2,
                 "pointSize": 5,
@@ -1133,6 +1128,7 @@ data:
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": true,
                 "stacking": {
                   "group": "A",
@@ -1148,7 +1144,7 @@ data:
                 "steps": [
                   {
                     "color": "green",
-                    "value": null
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -1169,26 +1165,23 @@ data:
           "id": 16,
           "options": {
             "legend": {
-              "calcs": [
-                "min",
-                "max",
-                "mean",
-                "sum"
-              ],
+              "calcs": ["min", "max", "mean", "sum"],
               "displayMode": "list",
               "placement": "bottom",
               "showLegend": true
             },
             "tooltip": {
+              "hideZeros": false,
               "mode": "single",
               "sort": "none"
             }
           },
+          "pluginVersion": "12.3.0",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "builder",
               "expr": "sum by(namespace) (rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\"}[$__rate_interval]))",
@@ -1203,7 +1196,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_SERVICEMONITOR}"
+            "uid": "Prometheus"
           },
           "description": "",
           "fieldConfig": {
@@ -1212,11 +1205,13 @@ data:
                 "mode": "palette-classic"
               },
               "custom": {
+                "axisBorderShow": false,
                 "axisCenteredZero": false,
                 "axisColorMode": "text",
                 "axisLabel": "Bytes",
                 "axisPlacement": "auto",
                 "barAlignment": 0,
+                "barWidthFactor": 0.6,
                 "drawStyle": "line",
                 "fillOpacity": 25,
                 "gradientMode": "opacity",
@@ -1225,6 +1220,7 @@ data:
                   "tooltip": false,
                   "viz": false
                 },
+                "insertNulls": false,
                 "lineInterpolation": "smooth",
                 "lineWidth": 2,
                 "pointSize": 5,
@@ -1232,6 +1228,7 @@ data:
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": true,
                 "stacking": {
                   "group": "A",
@@ -1247,7 +1244,7 @@ data:
                 "steps": [
                   {
                     "color": "green",
-                    "value": null
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -1268,26 +1265,23 @@ data:
           "id": 22,
           "options": {
             "legend": {
-              "calcs": [
-                "min",
-                "max",
-                "mean",
-                "sum"
-              ],
+              "calcs": ["min", "max", "mean", "sum"],
               "displayMode": "list",
               "placement": "bottom",
               "showLegend": true
             },
             "tooltip": {
+              "hideZeros": false,
               "mode": "single",
               "sort": "none"
             }
           },
+          "pluginVersion": "12.3.0",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "builder",
               "expr": "sum by(namespace) (rate(container_memory_working_set_bytes{namespace=~\"$namespace\"}[$__rate_interval]))",
@@ -1302,7 +1296,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_SERVICEMONITOR}"
+            "uid": "Prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -1310,11 +1304,13 @@ data:
                 "mode": "palette-classic"
               },
               "custom": {
+                "axisBorderShow": false,
                 "axisCenteredZero": false,
                 "axisColorMode": "text",
                 "axisLabel": "",
                 "axisPlacement": "auto",
                 "barAlignment": 0,
+                "barWidthFactor": 0.6,
                 "drawStyle": "line",
                 "fillOpacity": 25,
                 "gradientMode": "opacity",
@@ -1323,6 +1319,7 @@ data:
                   "tooltip": false,
                   "viz": false
                 },
+                "insertNulls": false,
                 "lineInterpolation": "smooth",
                 "lineWidth": 2,
                 "pointSize": 5,
@@ -1330,6 +1327,7 @@ data:
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": true,
                 "stacking": {
                   "group": "A",
@@ -1345,7 +1343,7 @@ data:
                 "steps": [
                   {
                     "color": "green",
-                    "value": null
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -1372,16 +1370,17 @@ data:
               "showLegend": false
             },
             "tooltip": {
+              "hideZeros": false,
               "mode": "multi",
               "sort": "none"
             }
           },
-          "pluginVersion": "8.3.3",
+          "pluginVersion": "12.3.0",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "code",
               "expr": "sum(rate(coredns_forward_requests_total[$__rate_interval]))",
@@ -1396,7 +1395,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_SERVICEMONITOR}"
+            "uid": "Prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -1404,11 +1403,13 @@ data:
                 "mode": "palette-classic"
               },
               "custom": {
+                "axisBorderShow": false,
                 "axisCenteredZero": false,
                 "axisColorMode": "text",
                 "axisLabel": "",
                 "axisPlacement": "auto",
                 "barAlignment": 0,
+                "barWidthFactor": 0.6,
                 "drawStyle": "line",
                 "fillOpacity": 25,
                 "gradientMode": "opacity",
@@ -1417,6 +1418,7 @@ data:
                   "tooltip": false,
                   "viz": false
                 },
+                "insertNulls": false,
                 "lineInterpolation": "smooth",
                 "lineWidth": 2,
                 "pointSize": 5,
@@ -1424,6 +1426,7 @@ data:
                   "type": "linear"
                 },
                 "showPoints": "never",
+                "showValues": false,
                 "spanNulls": true,
                 "stacking": {
                   "group": "A",
@@ -1439,7 +1442,7 @@ data:
                 "steps": [
                   {
                     "color": "green",
-                    "value": null
+                    "value": 0
                   },
                   {
                     "color": "red",
@@ -1466,16 +1469,17 @@ data:
               "showLegend": true
             },
             "tooltip": {
+              "hideZeros": false,
               "mode": "multi",
               "sort": "desc"
             }
           },
-          "pluginVersion": "8.3.3",
+          "pluginVersion": "12.3.0",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "exemplar": true,
               "expr": "sum(coredns_cache_entries) by (type)",
@@ -1490,7 +1494,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_SERVICEMONITOR}"
+            "uid": "Prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -1533,8 +1537,7 @@ data:
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -1569,7 +1572,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "builder",
               "expr": "sum by(interface) (rate(container_network_receive_bytes_total{id=\"/\", interface=~\"$netface\"}[$__rate_interval]))",
@@ -1585,7 +1588,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_SERVICEMONITOR}"
+            "uid": "Prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -1628,8 +1631,7 @@ data:
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -1664,7 +1666,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "builder",
               "expr": "avg by(pod) (rate(container_fs_writes_total{id=~\".+\", device=~\".+\", pod=~\"$pod\"}[$__rate_interval]))",
@@ -1680,7 +1682,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_SERVICEMONITOR}"
+            "uid": "Prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -1722,8 +1724,7 @@ data:
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -1744,9 +1745,7 @@ data:
           "id": 29,
           "options": {
             "legend": {
-              "calcs": [
-                "lastNotNull"
-              ],
+              "calcs": ["lastNotNull"],
               "displayMode": "list",
               "placement": "right",
               "showLegend": true
@@ -1760,7 +1759,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "builder",
               "expr": "max by(pod) (kube_pod_container_resource_limits{pod=~\".+\", resource=\"cpu\", unit=\"core\"})",
@@ -1775,7 +1774,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "Prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -1821,8 +1820,7 @@ data:
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -1857,7 +1855,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_PROMETHEUS}"
+                "uid": "Prometheus"
               },
               "editorMode": "builder",
               "expr": "max by(pod) (kube_pod_container_resource_limits{pod=~\".+\", resource=\"memory\", unit=\"byte\"})",
@@ -1872,7 +1870,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_SERVICEMONITOR}"
+            "uid": "Prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -1918,8 +1916,7 @@ data:
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -1940,9 +1937,7 @@ data:
           "id": 32,
           "options": {
             "legend": {
-              "calcs": [
-                "lastNotNull"
-              ],
+              "calcs": ["lastNotNull"],
               "displayMode": "list",
               "placement": "right",
               "showLegend": true
@@ -1956,7 +1951,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "builder",
               "expr": "max by(pod) (kube_pod_container_resource_requests{pod=~\".+\", resource=\"cpu\", unit=\"core\"})",
@@ -1971,7 +1966,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_SERVICEMONITOR}"
+            "uid": "Prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -2020,8 +2015,7 @@ data:
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -2038,9 +2032,7 @@ data:
                   "id": "byNames",
                   "options": {
                     "mode": "exclude",
-                    "names": [
-                      "mytbedge-757d7fb6c7-n95sm"
-                    ],
+                    "names": ["mytbedge-757d7fb6c7-n95sm"],
                     "prefix": "All except:",
                     "readOnly": true
                   }
@@ -2050,7 +2042,7 @@ data:
                     "id": "custom.hideFrom",
                     "value": {
                       "legend": false,
-                      "tooltip": false,
+                      "tooltip": true,
                       "viz": true
                     }
                   }
@@ -2081,7 +2073,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_SERVICEMONITOR}"
+                "uid": "Prometheus"
               },
               "editorMode": "builder",
               "expr": "max by(pod) (kube_pod_container_resource_requests{pod=~\".+\", resource=\"memory\", unit=\"byte\"})",
@@ -2094,24 +2086,22 @@ data:
           "type": "timeseries"
         }
       ],
+      "preload": false,
       "refresh": "5m",
-      "schemaVersion": 37,
-      "style": "dark",
-      "tags": [
-        "kubernetes",
-        "prometheus",
-        "cadvisor"
-      ],
+      "schemaVersion": 42,
+      "tags": ["kubernetes", "prometheus", "cadvisor"],
       "templating": {
         "list": [
           {
-            "current": {},
+            "current": {
+              "text": ["envoy-gateway-system"],
+              "value": ["envoy-gateway-system"]
+            },
             "datasource": {
               "type": "prometheus",
-              "uid": "${DS_SERVICEMONITOR}"
+              "uid": "Prometheus"
             },
             "definition": "label_values(kube_pod_info, namespace)",
-            "hide": 0,
             "includeAll": true,
             "multi": true,
             "name": "namespace",
@@ -2122,18 +2112,25 @@ data:
             },
             "refresh": 1,
             "regex": "",
-            "skipUrlSync": false,
             "sort": 1,
             "type": "query"
           },
           {
-            "current": {},
+            "current": {
+              "text": [
+                "envoy-envoy-gateway-system-homelab-gateway-00f55f79-f874d9l5pmn",
+                "envoy-gateway-c9dd54486-csq78"
+              ],
+              "value": [
+                "envoy-envoy-gateway-system-homelab-gateway-00f55f79-f874d9l5pmn",
+                "envoy-gateway-c9dd54486-csq78"
+              ]
+            },
             "datasource": {
               "type": "prometheus",
-              "uid": "${DS_PROMETHEUS}"
+              "uid": "Prometheus"
             },
             "definition": "label_values(kube_pod_info, pod)",
-            "hide": 0,
             "includeAll": true,
             "multi": true,
             "name": "pod",
@@ -2144,36 +2141,32 @@ data:
             },
             "refresh": 1,
             "regex": "",
-            "skipUrlSync": false,
             "sort": 1,
             "type": "query"
           },
           {
             "current": {
-              "selected": false,
-              "text": "servicemonitor",
-              "value": "servicemonitor"
+              "text": "Prometheus",
+              "value": "prometheus"
             },
-            "hide": 0,
             "includeAll": false,
-            "multi": false,
             "name": "datasource",
             "options": [],
             "query": "prometheus",
-            "queryValue": "",
             "refresh": 1,
             "regex": "",
-            "skipUrlSync": false,
             "type": "datasource"
           },
           {
-            "current": {},
+            "current": {
+              "text": "All",
+              "value": ["$__all"]
+            },
             "datasource": {
               "type": "prometheus",
-              "uid": "${DS_PROMETHEUS}"
+              "uid": "Prometheus"
             },
             "definition": "container_network_transmit_bytes_total{kubernetes_io_os=\"linux\"}",
-            "hide": 0,
             "includeAll": true,
             "multi": true,
             "name": "netface",
@@ -2184,7 +2177,6 @@ data:
             },
             "refresh": 1,
             "regex": "/.*interface=\"([^\"]*).*/",
-            "skipUrlSync": false,
             "sort": 1,
             "type": "query"
           }
@@ -2198,11 +2190,11 @@ data:
       "timezone": "Asia/Yangon",
       "title": "Kubernetes Dashboard",
       "uid": "e1RXnCbVz",
-      "version": 74,
-      "weekStart": "",
-      "gnetId": 18283
+      "version": 2
     }
 kind: ConfigMap
 metadata:
+  labels:
+    grafana_dashboard: "1"
   name: grafana-dashboard-kubernetes
   namespace: logging

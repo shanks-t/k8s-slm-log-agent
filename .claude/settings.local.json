@@ -97,7 +97,10 @@
       "Bash(git merge:*)",
       "Bash(git checkout:*)",
       "Bash(jq:*)",
-      "Bash(kubectl create:*)"
+      "Bash(kubectl create:*)",
+      "Bash(kubectl label:*)",
+      "Bash(awk:*)",
+      "Bash(just dashboard-cm:*)"
     ],
     "deny": [],
     "ask": []
