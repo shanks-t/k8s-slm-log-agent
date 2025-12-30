@@ -81,7 +81,7 @@ spec:
         mode: console
         level: info
 
-    # Datasources: Loki and Tempo with trace-to-logs correlation
+    # Datasources: Loki, Tempo, and Prometheus with cross-linking
     datasources:
       datasources.yaml:
         apiVersion: 1
@@ -137,6 +137,21 @@ spec:
                 enabled: true
               search:
                 hide: false
+
+          # Prometheus datasource (metrics)
+          - name: Prometheus
+            type: prometheus
+            uid: prometheus
+            access: proxy
+            url: http://prometheus-server.monitoring.svc.cluster.local
+            editable: true
+            jsonData:
+              httpMethod: POST
+              timeInterval: 30s
+              # Exemplars for trace integration (if enabled in Prometheus)
+              exemplarTraceIdDestinations:
+                - name: trace_id
+                  datasourceUid: tempo
 
     # Dashboard providers (none for now, add via Flux later)
     dashboardProviders: {}

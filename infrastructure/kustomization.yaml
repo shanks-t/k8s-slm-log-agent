@@ -9,3 +9,4 @@ resources:
   - controllers/    # Envoy Gateway controller
   - gateway/        # Gateway, HTTPRoutes (must be after controllers)
   - logging/        # Loki, Grafana, Tempo, Alloy
+  - monitoring/     # Prometheus, metrics-server, node-exporter

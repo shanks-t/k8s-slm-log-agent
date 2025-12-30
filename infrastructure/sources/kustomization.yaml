@@ -4,5 +4,6 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - grafana-charts.yaml       # Grafana Helm charts (Loki, Grafana, Tempo, Alloy)
+  - grafana-charts.yaml       # Grafana Helm charts (Loki, Grafana, Tempo, Alloy, Prometheus)
   - envoyproxy-charts.yaml    # Envoy Gateway Helm charts
+  - metrics-server-charts.yaml # Metrics Server Helm charts

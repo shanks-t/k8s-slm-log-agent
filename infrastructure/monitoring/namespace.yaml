@@ -1,0 +1,10 @@
+---
+# Monitoring namespace for metrics collection components
+# Prometheus, node-exporter, and metrics-server will live here
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    name: monitoring
+    purpose: observability

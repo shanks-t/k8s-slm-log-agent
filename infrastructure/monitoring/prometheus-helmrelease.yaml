@@ -1,0 +1,163 @@
+---
+# HelmRelease for Prometheus metrics collection system
+# Manages: Metrics storage, scraping, and querying
+# Deployed on: Node 2 (heavy hardware)
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  interval: 5m  # Check for updates every 5 minutes
+  chart:
+    spec:
+      chart: prometheus
+      version: '27.6.0'  # Pin to current version (prevent auto-updates)
+      sourceRef:
+        kind: HelmRepository
+        name: grafana
+        namespace: flux-system
+  install:
+    createNamespace: false  # Namespace created separately
+    remediation:
+      retries: 3  # Retry failed installs up to 3 times
+  upgrade:
+    remediation:
+      retries: 3  # Retry failed upgrades up to 3 times
+  values:
+    # Prometheus server configuration
+    server:
+      # Node placement: Run on Node 2 (heavy hardware)
+      nodeSelector:
+        hardware: heavy
+
+      # Tolerate Node 2 taint
+      tolerations:
+        - key: heavy
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+
+      # Persistent storage (uses PV created in infrastructure/storage/)
+      persistentVolume:
+        enabled: true
+        size: 50Gi
+        storageClass: local-storage
+        selector:
+          matchLabels:
+            app: prometheus
+            type: local
+
+      # Resource limits (focused metrics = lower resource needs)
+      resources:
+        requests:
+          cpu: 500m      # 0.5 CPU cores
+          memory: 1Gi    # 1GB RAM
+        limits:
+          cpu: 2         # 2 CPU cores max
+          memory: 4Gi    # 4GB RAM max
+
+      # Retention: 15 days of metrics
+      retention: "15d"
+
+      # Global scrape config
+      global:
+        scrape_interval: 30s       # Scrape targets every 30 seconds
+        scrape_timeout: 10s        # Timeout after 10 seconds
+        evaluation_interval: 30s   # Evaluate rules every 30 seconds
+
+    # Disable alertmanager (not needed for learning/homelab)
+    alertmanager:
+      enabled: false
+
+    # Disable kube-state-metrics (we'll add later if needed)
+    kube-state-metrics:
+      enabled: false
+
+    # Disable pushgateway (not needed)
+    pushgateway:
+      enabled: false
+
+    # Node exporter - collect node-level metrics (CPU, memory, disk, network)
+    nodeExporter:
+      enabled: true
+      # DaemonSet: runs on all nodes
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+        - key: heavy
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+      resources:
+        requests:
+          cpu: 100m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 128Mi
+
+    # Disable server-side UI (use Grafana instead)
+    serverFiles:
+      prometheus.yml:
+        scrape_configs:
+          # Scrape Prometheus itself
+          - job_name: prometheus
+            static_configs:
+              - targets:
+                  - localhost:9090
+
+          # Scrape node-exporter for node metrics
+          - job_name: node-exporter
+            kubernetes_sd_configs:
+              - role: endpoints
+            relabel_configs:
+              - source_labels: [__meta_kubernetes_endpoints_name]
+                regex: prometheus-prometheus-node-exporter
+                action: keep
+              - source_labels: [__meta_kubernetes_endpoint_port_name]
+                regex: metrics
+                action: keep
+              - source_labels: [__meta_kubernetes_endpoint_address_target_name]
+                target_label: node
+              - source_labels: [__meta_kubernetes_namespace]
+                target_label: namespace
+
+          # Scrape kubelet metrics (cAdvisor for container metrics)
+          - job_name: kubelet
+            scheme: https
+            tls_config:
+              ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+              insecure_skip_verify: true
+            bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+            kubernetes_sd_configs:
+              - role: node
+            relabel_configs:
+              - action: labelmap
+                regex: __meta_kubernetes_node_label_(.+)
+              - target_label: __address__
+                replacement: kubernetes.default.svc:443
+              - source_labels: [__meta_kubernetes_node_name]
+                regex: (.+)
+                target_label: __metrics_path__
+                replacement: /api/v1/nodes/${1}/proxy/metrics
+
+          # Scrape cAdvisor for container metrics
+          - job_name: cadvisor
+            scheme: https
+            tls_config:
+              ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+              insecure_skip_verify: true
+            bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+            kubernetes_sd_configs:
+              - role: node
+            relabel_configs:
+              - action: labelmap
+                regex: __meta_kubernetes_node_label_(.+)
+              - target_label: __address__
+                replacement: kubernetes.default.svc:443
+              - source_labels: [__meta_kubernetes_node_name]
+                regex: (.+)
+                target_label: __metrics_path__
+                replacement: /api/v1/nodes/${1}/proxy/metrics/cadvisor

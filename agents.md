@@ -291,12 +291,20 @@ Below is a clean, incremental roadmap for implementing the full system.
 8. ✅ Deploy Tempo on Node 2 for distributed tracing (50GB PVC)
 9. ✅ Configure Tempo datasource in Grafana with trace-to-logs correlation
 10. ✅ Validate: View container logs in Grafana and distributed traces from instrumented services
+11. ✅ Deploy Prometheus on Node 2 for metrics collection (50GB PVC)
+12. ✅ Deploy node-exporter DaemonSet on all nodes for node-level metrics
+13. ✅ Deploy metrics-server on Node 1 for kubectl top commands (CKA exam prep)
+14. ✅ Configure Prometheus datasource in Grafana with cross-linking to traces/logs
+15. ✅ Configure Prometheus scrape targets: kubelet, cAdvisor, node-exporter
 
 **Technology Decisions:**
 - **Grafana Alloy instead of Promtail:** Promtail is deprecated (EOL March 2026). Alloy is the replacement and offers unified log/metrics/trace collection, better performance, and active development. Ready for future OTel trace collection if needed.
 - **Tempo for distributed tracing:** Lightweight, cost-effective tracing backend designed for high-volume environments. Works seamlessly with Grafana for trace visualization and correlation.
 - **OpenTelemetry integration:** Services instrumented with OpenTelemetry SDK send traces to Tempo via OTLP (gRPC on port 4317). This provides vendor-neutral instrumentation that works across languages and frameworks.
-- **Trace-to-logs correlation:** Grafana configured with derived fields to extract trace_id from Loki logs and link to Tempo traces. Bidirectional navigation between traces and logs.  
+- **Trace-to-logs correlation:** Grafana configured with derived fields to extract trace_id from Loki logs and link to Tempo traces. Bidirectional navigation between traces and logs.
+- **Prometheus for metrics:** Focused metrics stack without kube-state-metrics to reduce noise. Collects high-value signals: node resources (CPU/memory/disk), container metrics (cAdvisor), and kubelet health. 15-day retention on 50GB storage.
+- **metrics-server for CKA exam prep:** Enables `kubectl top nodes` and `kubectl top pods` commands - essential for Troubleshooting domain (30% of CKA exam). Provides real-time resource usage without historical data.
+- **Three pillars of observability:** Complete observability stack with logs (Loki), traces (Tempo), and metrics (Prometheus) - all cross-linked in Grafana for unified troubleshooting.  
 
 ---
 
