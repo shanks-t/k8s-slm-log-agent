@@ -39,6 +39,12 @@ spec:
     nodeSelector:
       hardware: light
 
+    # Tolerate control-plane taint on node-1
+    tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+
     # Args for metrics-server
     args:
       - --cert-dir=/tmp

@@ -15,7 +15,7 @@ spec:
       version: '27.6.0'  # Pin to current version (prevent auto-updates)
       sourceRef:
         kind: HelmRepository
-        name: grafana
+        name: prometheus-community
         namespace: flux-system
   install:
     createNamespace: false  # Namespace created separately
