@@ -43,7 +43,7 @@ spec:
             - "--port"
             - "8080"
             - "--ctx-size"
-            - "4096"
+            - "8192"  # 8192 / 2 slots = 4096 tokens per slot
             - "--threads"
             - "14"  # Conservative from our 16-thread benchmark
             - "--parallel"
