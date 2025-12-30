@@ -146,6 +146,29 @@ spec:
               }
             }
 
+            // Drop health check logs to reduce noise and storage costs
+            // Matches: "srv  log_server_r: request: GET /health 10.42.2.1 200"
+            stage.drop {
+              source                = ""
+              expression            = ".*GET /health.*200.*"
+              drop_counter_reason   = "health_check"
+            }
+
+            // Drop successful Envoy access logs (200 responses)
+            // Matches JSON logs with "response_code":200
+            stage.drop {
+              source                = ""
+              expression            = ".*\"response_code\":200.*"
+              drop_counter_reason   = "envoy_200_access_log"
+            }
+
+            // Drop Kubernetes readiness/liveness probe logs
+            stage.drop {
+              source                = ""
+              expression            = ".*(readiness|liveness).*"
+              drop_counter_reason   = "k8s_probes"
+            }
+
             // Forward processed logs to Loki
             forward_to = [loki.write.loki_endpoint.receiver]
           }
