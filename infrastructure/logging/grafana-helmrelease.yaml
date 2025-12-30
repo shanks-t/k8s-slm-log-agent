@@ -167,18 +167,20 @@ spec:
             options:
               path: /var/lib/grafana/dashboards/default
 
-    # Dashboards - mount ConfigMaps as dashboard files
-    # Map datasource template variables to our Prometheus datasource
-    dashboards:
-      default:
-        kubernetes-dashboard:
-          gnetId: 18283
-          revision: 1
-          datasource:
-            - name: DS_SERVICEMONITOR
-              value: Prometheus
-            - name: DS_PROMETHEUS
-              value: Prometheus
+    # Sidecar to automatically discover and load dashboards from ConfigMaps
+    sidecar:
+      dashboards:
+        enabled: true
+        label: grafana_dashboard
+        labelValue: "1"
+        folder: /tmp/dashboards
+        defaultFolderName: "Kubernetes"
+        searchNamespace: logging
+        provider:
+          foldersFromFilesStructure: true
+
+    # Dashboards - empty since we're using ConfigMap-based dashboards via sidecar
+    dashboards: {}
 
     # Plugins (none for now, add via Flux later)
     plugins: []
