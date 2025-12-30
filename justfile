@@ -99,7 +99,7 @@ test-all:
 #   just test-stream llm 30m          # Last 30 minutes of llm namespace
 #   just test-stream kube-system 24h  # Last 24 hours of kube-system
 test-stream namespace="kube-system" duration="24h":
-    @helpers/test-stream.sh {{namespace}} {{duration}}
+    @just-helpers/test-stream.sh {{namespace}} {{duration}}
 
 # Port-forward DEPLOYED log-analyzer service to localhost
 #
@@ -160,7 +160,7 @@ stop-k8s:
 #   just test-k8s llm 30m                  # Last 30 minutes
 #   just test-k8s namespace=llm duration=24h
 test-k8s namespace="log-analyzer" duration="1h":
-    @helpers/test-k8s.sh {{namespace}} {{duration}}
+    @just-helpers/test-k8s.sh {{namespace}} {{duration}}
 
 # Test DEPLOYED log-analyzer via port-forward from your Mac
 #
@@ -173,7 +173,7 @@ test-k8s namespace="log-analyzer" duration="1h":
 #   just test-k8s-local llm 30m                  # Last 30 minutes
 #   just test-k8s-local namespace=llm duration=24h
 test-k8s-local namespace="log-analyzer" duration="1h":
-    @helpers/test-k8s-local.sh {{namespace}} {{duration}}
+    @just-helpers/test-k8s-local.sh {{namespace}} {{duration}}
 
 # Evaluate log-analyzer by comparing LLM analysis with raw Loki logs
 #
@@ -203,7 +203,7 @@ evaluate namespace="log-analyzer" duration="1h":
 # Requires: .env file with GITHUB_USER defined
 # Output: ghcr.io/${GITHUB_USER}/log-analyzer:latest and :${GIT_SHA}
 build:
-    @helpers/build.sh
+    @just-helpers/build.sh
 
 # Push log-analyzer image to GitHub Container Registry
 #
@@ -213,7 +213,7 @@ build:
 # Requires: .env file with GITHUB_USER and GHCR_TOKEN
 # Requires: 'just build' to have been run first
 push:
-    @helpers/push.sh
+    @just-helpers/push.sh
 
 # Deploy log-analyzer to Kubernetes via Flux
 #
@@ -223,7 +223,7 @@ push:
 # Requires: .env file with GITHUB_USER
 # Workflow: Updates deployment.yaml → git commit → git push → flux reconcile
 deploy:
-    @helpers/deploy.sh
+    @just-helpers/deploy.sh
 
 # Build, push, and deploy log-analyzer (full release workflow)
 #
