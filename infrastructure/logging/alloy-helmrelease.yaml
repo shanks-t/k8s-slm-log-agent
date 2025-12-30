@@ -29,11 +29,16 @@ spec:
     # Controller type: DaemonSet (runs on every node)
     controller:
       type: daemonset
-      # Tolerate Node 2 taint so it runs on both nodes
+      # Tolerations to run on all nodes
       tolerations:
+        # Tolerate node-2 taint (heavy workloads)
         - key: heavy
           operator: Equal
           value: "true"
+          effect: NoSchedule
+        # Tolerate node-1 taint (control-plane)
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
           effect: NoSchedule
 
     # Resource limits (per pod, one per node)
