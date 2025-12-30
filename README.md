@@ -63,69 +63,25 @@ This project uses [`just`](https://just.systems/) as a command runner for develo
 All commands should be run from the repository root:
 
 ```bash
-# Start development environment (port-forwards Loki and LLM services)
-just dev
-
-# Stop all dev processes
-just stop
-
-# Run unit tests (fast, mocked dependencies)
-just test
-
-# Run integration tests (requires 'just dev' running)
-just test-int
-
-# Run all tests (unit + integration)
-just test-all
-
-# Test the streaming analyze endpoint (local dev)
-just test-stream [namespace] [duration]
-# Examples:
-#   just test-stream llm 30m          # Last 30 minutes of llm namespace logs
-#   just test-stream kube-system 24h  # Last 24 hours of kube-system logs
-
-# Test Kubernetes-deployed log-analyzer service
-just test-k8s [namespace] [duration]
-# Examples:
-#   just test-k8s llm                 # Last 1 hour (default)
-#   just test-k8s llm 30m             # Last 30 minutes
-#   just test-k8s namespace=llm duration=24h
-
-# Test via port-forward (self-contained, auto-cleanup)
-just test-k8s-local [namespace] [duration]
-# Examples:
-#   just test-k8s-local llm 30m       # Automatically sets up port-forward
-
-# Evaluate LLM analysis quality against raw logs
-just evaluate [namespace] [duration]
-# Examples:
-#   just evaluate llm 30m             # Compare LLM analysis with raw Loki logs
-#   just evaluate kube-system 1h      # Saves to tmp/evaluation-<timestamp>.json
-
-# List all available recipes
 just --list
+Available recipes:
+    build                                              # Output: ghcr.io/${GITHUB_USER}/log-analyzer:latest and :${GIT_SHA}
+    default                                            # Default recipe runs dev
+    deploy                                             # Workflow: Updates deployment.yaml → git commit → git push → flux reconcile
+    dev                                                # Stop with: Ctrl+C or 'just stop'
+    dev-k8s                                            # Note: For one-off tests, use 'just test-k8s-local' (auto-cleanup)
+    evaluate namespace="log-analyzer" duration="1h"    # just evaluate kube-system 1h       # Evaluate last 1 hour
+    push                                               # Requires: 'just build' to have been run first
+    release                                            # Example: just release
+    stop                                               # Safe to run even if nothing is running.
+    stop-k8s                                           # Safe to run even if nothing is running.
+    test                                               # Dependencies are mocked (Loki, LLaMA).
+    test-all                                           # Requires: 'just dev' running in another terminal
+    test-int                                           # Tests use real Loki, LLaMA services via port-forward.
+    test-k8s namespace="log-analyzer" duration="1h"    # just test-k8s namespace=llm duration=24h
+    test-k8s-local namespace="log-analyzer" duration="1h" # just test-k8s-local namespace=llm duration=24h
+    test-stream namespace="kube-system" duration="24h" # just test-stream kube-system 24h  # Last 24 hours of kube-system
 ```
-
-**Duration format**: Use format like `1h` (hours), `30m` (minutes), or `2d` (days)
-
-### Development Workflow
-
-1. Start the development environment to forward Kubernetes services to localhost:
-   ```bash
-   just dev
-   ```
-
-2. In another terminal, run tests or make API calls:
-   ```bash
-   just test
-   just test-stream kube-system
-   ```
-
-3. The FastAPI service will be available at `http://127.0.0.1:8000` with auto-reload enabled.
-
-See `workloads/log-analyzer/tests/README.md` for detailed testing documentation.
-
----
 
 ## Architecture & Implementation Guide
 
@@ -265,35 +221,7 @@ This system provides structured extraction, triage, and summarization of logs us
 
 # 5. Evaluation & Drift Detection TODO:
 
-To ensure the log intelligence system remains correct over time:
-
-### **Golden Dataset**
-- Curated set of:
-  - Kubernetes infra logs  
-  - Application logs  
-  - Common failure signatures  
-- Each with:
-  - Ground-truth structured JSON extraction  
-  - Optional natural-language summary
-
-### **Evaluation Job (CronJob on Node 2)**
-- Replay golden samples through the pipeline
-- Compute metrics:
-  - Extraction accuracy  
-  - Root-cause accuracy  
-  - Severity classification accuracy  
-  - Summary adequacy scores  
-- Emit OpenTelemetry metrics for:
-  - Drift detection  
-  - Regression tracking  
-  - Pipeline latency  
-
-### **Visualization**
-- Grafana dashboards for:
-  - Eval accuracy over time  
-  - RAG retrieval hit rate  
-  - LLM inference latency  
-  - Chunking efficiency metrics  
+Current [evals plan](./evals.md)
 
 ---
 
