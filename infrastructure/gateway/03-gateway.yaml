@@ -7,10 +7,6 @@ kind: Gateway
 metadata:
   name: homelab-gateway
   namespace: envoy-gateway-system
-  annotations:
-    # Reference the EnvoyProxy configuration for deployment settings
-    # This tells Envoy Gateway to use our custom config (NodePort, node selector, etc.)
-    gateway.envoyproxy.io/envoy-proxy: envoy-proxy-config
 spec:
   # Which GatewayClass to use (references 01-gatewayclass.yaml)
   gatewayClassName: eg

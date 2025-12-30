@@ -14,5 +14,10 @@ spec:
   # This MUST match what Envoy Gateway controller is watching for
   controllerName: gateway.envoyproxy.io/gatewayclass-controller
 
-  # parametersRef allows advanced configuration (optional)
-  # We'll skip this for now - using Envoy Gateway defaults
+  # parametersRef points to our EnvoyProxy configuration
+  # This applies our custom settings (nodeSelector, externalTrafficPolicy, etc.)
+  parametersRef:
+    group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: envoy-proxy-config
+    namespace: envoy-gateway-system
