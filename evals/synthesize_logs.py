@@ -238,7 +238,7 @@ def main():
     }
 
     synthetic_logs = generate_synthetic_dataset(
-        templates_file="scripts/log_templates.json",
+        templates_file="log_templates.json",
         target_counts=target_counts,
         output_file="golden_dataset_synthetic.json"
     )
