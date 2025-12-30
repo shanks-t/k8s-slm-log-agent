@@ -2,13 +2,55 @@
 
 import logging
 import json
-from typing import Any
+from typing import Any, TypedDict
 from opentelemetry import trace
+
+
+STANDARD_LOG_RECORD_ATTRS = {
+    "name",
+    "msg",
+    "args",
+    "levelname",
+    "levelno",
+    "pathname",
+    "filename",
+    "module",
+    "exc_info",
+    "exc_text",
+    "stack_info",
+    "lineno",
+    "funcName",
+    "created",
+    "msecs",
+    "relativeCreated",
+    "thread",
+    "threadName",
+    "processName",
+    "process",
+}
+
+
+class StructuredLog(TypedDict, total=False):
+    timestamp: str
+    level: str
+    logger: str
+    message: str
+
+    trace_id: str
+    span_id: str
+    sampled: bool
+
+    exception: str
 
 
 class StructuredFormatter(logging.Formatter):
     """
     JSON formatter that automatically injects trace context into logs.
+
+    For OTel the recommended production approach:
+    - Use standard logging
+    - Inject trace context manually or via instrumentation
+    - Emit structured logs (JSON) for systems like Loki
 
     This enables correlation between logs and traces:
     - Logs include trace_id and span_id
@@ -20,31 +62,48 @@ class StructuredFormatter(logging.Formatter):
         """Format log record as JSON with trace context."""
         # Get current span context
         span = trace.get_current_span()
-        span_context = span.get_span_context()
+        if span is not None:
+            span_context = span.get_span_context()
+            # Build structured log entry
+            log_data: dict[str, Any] = {
+                "timestamp": self.formatTime(record),
+                "level": record.levelname,
+                "logger": record.name,
+                "message": record.getMessage(),
+            }
 
-        # Build structured log entry
-        log_data = {
-            "timestamp": self.formatTime(record),
-            "level": record.levelname,
-            "logger": record.name,
-            "message": record.getMessage(),
-        }
+            # there are legitimate cases where there is no active span
+            # logging should never break in these cases so we skip injection
+            if span_context.is_valid:
+                log_data["trace_id"] = format(span_context.trace_id, "032x")
+                log_data["span_id"] = format(span_context.span_id, "016x")
+                log_data["sampled"] = bool(span_context.trace_flags & 0x01)
 
-        # Inject trace context if available
-        if span_context.is_valid:
-            log_data["trace_id"] = format(span_context.trace_id, "032x")
-            log_data["span_id"] = format(span_context.span_id, "016x")
-            log_data["trace_flags"] = span_context.trace_flags
+            # Add exception info if present
+            if record.exc_info:
+                log_data["exception"] = self.formatException(record.exc_info)
 
-        # Add exception info if present
-        if record.exc_info:
-            log_data["exception"] = self.formatException(record.exc_info)
-
-        # Add any extra fields from logger.info("msg", extra={"key": "value"})
-        if hasattr(record, "extra_fields"):
-            log_data.update(record.extra_fields)
-
-        return json.dumps(log_data)
+            # Add any extra fields from logger.info("msg", extra={"key": "value"})
+            for key, value in record.__dict__.items():
+                if key not in STANDARD_LOG_RECORD_ATTRS:
+                    log_data[key] = value
+        else:
+            # Fallback to standard log format if no span
+            log_data = {
+                "timestamp": self.formatTime(record),
+                "level": record.levelname,
+                "logger": record.name,
+                "message": record.getMessage(),
+            }
+            if record.exc_info:
+                log_data["exception"] = self.formatException(record.exc_info)
+            for key, value in record.__dict__.items():
+                if key not in STANDARD_LOG_RECORD_ATTRS:
+                    log_data[key] = value
+        # cast for clarity (no runtime affect)
+        # suppress only assignment related mypy errors
+        structured_log: StructuredLog = log_data  # type: ignore[assignment]
+        return json.dumps(structured_log)
 
 
 def setup_logging(level: str = "INFO"):
@@ -59,6 +118,8 @@ def setup_logging(level: str = "INFO"):
     logger.setLevel(level)
 
     # Remove existing handlers
+    # no duplicates, avoids mixed formatting, makes logs deterministic
+    # NOTE: if other libraries have added handlers, this removes them too
     logger.handlers.clear()
 
     # Create console handler with structured formatter

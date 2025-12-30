@@ -3,6 +3,7 @@
 from contextlib import asynccontextmanager
 import json
 import os
+from uuid import MAX
 import httpx
 from datetime import datetime, UTC
 
@@ -326,6 +327,7 @@ def build_text_header(normalized_logs, time_range):
 
 
 async def stream_llm(prompt: str):
+    MAX_TOKENS = 200
     # Create a span to trace the LLM streaming call
     with tracer.start_as_current_span("call_llm") as llm_span:
         # Add LLM-specific attributes for debugging
