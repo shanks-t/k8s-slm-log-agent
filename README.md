@@ -98,7 +98,7 @@ The goal is to build a realistic, production-inspired observability + LLM pipeli
 
 ---
 
-# 1. [Cluster Hardware Summary](./reference/node-specs.md)
+# 1. [Cluster Hardware Summary](./docs/node-specs.md)
 ---
 
 # 2. Storage Strategy
