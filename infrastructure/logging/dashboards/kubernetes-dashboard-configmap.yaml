@@ -4,6 +4,7 @@
 # Variables updated:
 #   - namespace: label_values(container_cpu_usage_seconds_total, namespace)
 #   - pod: label_values(container_cpu_usage_seconds_total{namespace="$namespace"}, pod)
+apiVersion: v1
 data:
   kubernetes-dashboard.json: |
     {
