@@ -1,7 +1,0 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: llm
-  labels:
-    name: llm
-    purpose: machine-learning

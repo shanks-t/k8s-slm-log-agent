@@ -89,7 +89,9 @@
       "Bash(kubectl taint:*)",
       "Bash(git config:*)",
       "Bash(source .env)",
-      "Bash(helpers/push.sh)"
+      "Bash(helpers/push.sh)",
+      "Bash(just evaluate)",
+      "Bash(xargs:*)"
     ],
     "deny": [],
     "ask": []
