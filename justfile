@@ -235,3 +235,34 @@ release: build push deploy
     @echo ""
     @echo "✓ Release complete!"
     @echo "Monitor deployment: kubectl get pods -n log-analyzer -w"
+
+# Create Grafana dashboard ConfigMap from exported JSON
+#
+# Converts a Grafana dashboard JSON (from UI export) into a Kubernetes ConfigMap
+# with the correct label for automatic sidecar discovery.
+#
+# Workflow:
+#   1. Edit dashboard in Grafana UI until it works perfectly
+#   2. Export JSON: Dashboard Settings → JSON Model → Copy all
+#   3. Paste JSON into tmp/dashboard.json (in repo root)
+#   4. Run: just dashboard-cm my-dashboard-name
+#   5. Review generated file in infrastructure/logging/dashboards/
+#   6. Apply to test: kubectl apply -f infrastructure/logging/dashboards/my-dashboard-name-configmap.yaml
+#   7. Commit to Git once validated
+#
+# Required file: tmp/dashboard.json (exported from Grafana)
+# Output: infrastructure/logging/dashboards/<name>-configmap.yaml
+#
+# The ConfigMap will include:
+#   - Proper metadata with name and namespace
+#   - Label 'grafana_dashboard: "1"' for sidecar discovery
+#   - Your dashboard JSON as data
+#
+# Examples:
+#   just dashboard-cm kubernetes        # Creates kubernetes-configmap.yaml
+#   just dashboard-cm cluster-overview  # Creates cluster-overview-configmap.yaml
+#
+# CKA Exam Note: ConfigMaps are part of the Storage domain (10% of exam).
+# This recipe demonstrates declarative ConfigMap creation from file data.
+dashboard-cm name:
+    @just-helpers/dashboard-cm.sh {{name}}
