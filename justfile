@@ -236,33 +236,38 @@ release: build push deploy
     @echo "✓ Release complete!"
     @echo "Monitor deployment: kubectl get pods -n log-analyzer -w"
 
-# Create Grafana dashboard ConfigMap from exported JSON
+# Create and deploy Grafana dashboard ConfigMap from exported JSON
 #
 # Converts a Grafana dashboard JSON (from UI export) into a Kubernetes ConfigMap
-# with the correct label for automatic sidecar discovery.
+# and automatically deploys it to the cluster. The ConfigMap has the correct label
+# for automatic Grafana sidecar discovery.
 #
 # Workflow:
 #   1. Edit dashboard in Grafana UI until it works perfectly
 #   2. Export JSON: Dashboard Settings → JSON Model → Copy all
 #   3. Paste JSON into tmp/dashboard.json (in repo root)
 #   4. Run: just dashboard-cm my-dashboard-name
-#   5. Review generated file in infrastructure/logging/dashboards/
-#   6. Apply to test: kubectl apply -f infrastructure/logging/dashboards/my-dashboard-name-configmap.yaml
-#   7. Commit to Git once validated
+#   5. Wait ~10s for Grafana sidecar to reload dashboard
+#   6. Verify dashboard appears in Grafana UI
+#   7. Commit to Git for GitOps persistence
+#
+# What this recipe does:
+#   ✅ Validates JSON format
+#   ✅ Creates ConfigMap YAML with grafana_dashboard: "1" label
+#   ✅ Adds last-applied-configuration annotation (prevents kubectl warnings)
+#   ✅ Validates against Kubernetes API
+#   ✅ Automatically applies to cluster
+#   ✅ Shows dashboard info and ConfigMap status
 #
 # Required file: tmp/dashboard.json (exported from Grafana)
-# Output: infrastructure/logging/dashboards/<name>-configmap.yaml
-#
-# The ConfigMap will include:
-#   - Proper metadata with name and namespace
-#   - Label 'grafana_dashboard: "1"' for sidecar discovery
-#   - Your dashboard JSON as data
+# Output: infrastructure/logging/dashboards/<name>-configmap.yaml (saved + applied)
 #
 # Examples:
-#   just dashboard-cm kubernetes        # Creates kubernetes-configmap.yaml
-#   just dashboard-cm cluster-overview  # Creates cluster-overview-configmap.yaml
+#   just dashboard-cm kubernetes        # Creates & applies kubernetes-configmap.yaml
+#   just dashboard-cm cluster-overview  # Creates & applies cluster-overview-configmap.yaml
+#   just dashboard-cm coredns          # Creates & applies coredns-configmap.yaml
 #
 # CKA Exam Note: ConfigMaps are part of the Storage domain (10% of exam).
-# This recipe demonstrates declarative ConfigMap creation from file data.
+# This recipe demonstrates declarative ConfigMap creation and deployment.
 dashboard-cm name:
     @just-helpers/dashboard-cm.sh {{name}}

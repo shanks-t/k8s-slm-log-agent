@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Create Grafana dashboard ConfigMap from exported JSON
+# Create and deploy Grafana dashboard ConfigMap from exported JSON
 # Takes dashboard name as argument and reads from tmp/dashboard.json in repo root
+# Automatically applies the ConfigMap to the cluster
 
 set -euo pipefail
 
@@ -85,23 +86,69 @@ EOF
 cat /tmp/cm-labeled.yaml >> "${output_file}"
 
 # Validate the generated ConfigMap
-if kubectl apply -f "${output_file}" --dry-run=server &>/dev/null; then
-    echo "✅ ConfigMap created: ${output_file}"
-    echo ""
-    echo "Dashboard info:"
-    jq -r '.title // "Unknown"' "${dashboard_file}" | sed 's/^/  Title: /'
-    jq -r '.uid // "Unknown"' "${dashboard_file}" | sed 's/^/  UID: /'
-    wc -l "${output_file}" | awk '{print "  Size: " $1 " lines"}'
-    echo ""
-    echo "Next steps:"
-    echo "  1. Test: kubectl apply -f ${output_file}"
-    echo "  2. Verify in Grafana UI (wait ~10s for sidecar reload)"
-    echo "  3. Commit: git add ${output_file} && git commit -m 'feat: add ${name} dashboard'"
-else
+if ! kubectl apply -f "${output_file}" --dry-run=server &>/dev/null; then
     echo "❌ Error: Generated ConfigMap failed validation"
     echo "Check ${output_file} for issues"
     exit 1
 fi
+
+# Apply the ConfigMap to the cluster
+echo "Applying ConfigMap to cluster..."
+apply_output=$(kubectl apply -f "${output_file}" 2>&1)
+apply_status=$?
+
+if [ $apply_status -ne 0 ]; then
+    echo ""
+    echo "❌ Error: Failed to apply ConfigMap to cluster"
+    echo "${apply_output}"
+    echo "File created: ${output_file}"
+    echo "You can manually apply with: kubectl apply -f ${output_file}"
+    exit 1
+fi
+
+echo "${apply_output}"
+configmap_exists=$(echo "${apply_output}" | grep -c "configured" || true)
+
+# If ConfigMap was updated (not created), restart Grafana to force reload
+if [ "${configmap_exists}" -gt 0 ]; then
+    echo ""
+    echo "ConfigMap updated. Restarting Grafana to reload dashboard..."
+    if kubectl rollout restart deployment/grafana -n logging &>/dev/null; then
+        echo "Waiting for Grafana to be ready..."
+        kubectl rollout status deployment/grafana -n logging --timeout=60s 2>&1 | grep -E "(successfully|Waiting)" | tail -1
+    else
+        echo "⚠️  Warning: Could not restart Grafana automatically"
+        echo "Manually restart with: kubectl rollout restart deployment/grafana -n logging"
+    fi
+fi
+
+echo ""
+echo "✅ ConfigMap deployed: ${output_file}"
+echo ""
+echo "Dashboard info:"
+jq -r '.title // "Unknown"' "${dashboard_file}" | sed 's/^/  Title: /'
+jq -r '.uid // "Unknown"' "${dashboard_file}" | sed 's/^/  UID: /'
+wc -l "${output_file}" | awk '{print "  Size: " $1 " lines"}'
+echo ""
+
+# Show ConfigMap status
+echo "ConfigMap status:"
+kubectl get configmap "${cm_name}" -n logging -o wide 2>/dev/null | sed 's/^/  /'
+echo ""
+
+# Show recent sidecar activity
+echo "Sidecar status (last 3 events):"
+kubectl logs -n logging deployment/grafana -c grafana-sc-dashboard --tail=10 2>/dev/null | \
+    grep -E "(Writing.*${name}|reload.*200 OK)" | tail -3 | \
+    while IFS= read -r line; do
+        echo "${line}" | jq -r '  "  " + .time + " " + .level + " " + .msg' 2>/dev/null || echo "  ${line}"
+    done
+
+echo ""
+echo "Next steps:"
+echo "  1. Verify dashboard appears in Grafana UI"
+echo "  2. Test dashboard functionality (variables, panels, queries)"
+echo "  3. Commit: git add ${output_file} && git commit -m 'feat: add ${name} dashboard'"
 
 # Cleanup temp files
 rm -f /tmp/cm-base.yaml /tmp/cm-labeled.yaml
