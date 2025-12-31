@@ -100,7 +100,17 @@
       "Bash(kubectl create:*)",
       "Bash(kubectl label:*)",
       "Bash(awk:*)",
-      "Bash(just dashboard-cm:*)"
+      "Bash(just dashboard-cm:*)",
+      "Bash(cut:*)",
+      "Bash(if [ -f tmp/dashboard.json ])",
+      "Bash(then grep -c \"coredns_proxy_request_duration_seconds_count\" tmp/dashboard.json)",
+      "Bash(else echo \"❌ tmp/dashboard.json doesn''t exist\")",
+      "Bash(then jq -r '.uid // \"\"no UID\"\"' tmp/dashboard.json)",
+      "Bash(else echo \"File not found\")",
+      "Bash(md5:*)",
+      "Bash(bash -x just-helpers/dashboard-cm.sh:*)",
+      "Bash(tee:*)",
+      "Bash(bash:*)"
     ],
     "deny": [],
     "ask": []

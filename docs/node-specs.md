@@ -70,6 +70,3 @@ ssh node2  # or ssh 10.0.0.103
 ```bash
 kubectl get nodes  # uses ~/.kube/config
 ```
-
-### loki datasource
-http://loki.logging.svc.cluster.local:3100/
