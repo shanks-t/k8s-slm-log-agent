@@ -169,3 +169,19 @@ spec:
                 regex: (.+)
                 target_label: __metrics_path__
                 replacement: /api/v1/nodes/${1}/proxy/metrics/cadvisor
+
+          # Scrape kube-state-metrics for cluster state
+          - job_name: kube-state-metrics
+            kubernetes_sd_configs:
+              - role: endpoints
+            relabel_configs:
+              - source_labels: [__meta_kubernetes_service_name]
+                regex: prometheus-kube-state-metrics
+                action: keep
+              - source_labels: [__meta_kubernetes_endpoint_port_name]
+                regex: http
+                action: keep
+              - source_labels: [__meta_kubernetes_namespace]
+                target_label: namespace
+              - source_labels: [__meta_kubernetes_service_name]
+                target_label: service
