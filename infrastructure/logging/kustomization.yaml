@@ -9,4 +9,4 @@ resources:
   - grafana-helmrelease.yaml                          # Grafana dashboards
   - tempo-helmrelease.yaml                            # Tempo distributed tracing
   - alloy-helmrelease.yaml                            # Alloy log collection (DaemonSet)
-  - dashboards/kubernetes-dashboard-configmap.yaml    # Fixed K8s dashboard
+  - dashboards/kubernetes-configmap.yaml              # Fixed K8s dashboard
