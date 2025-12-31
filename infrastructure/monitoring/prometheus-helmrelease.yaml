@@ -70,9 +70,17 @@ spec:
     alertmanager:
       enabled: false
 
-    # Disable kube-state-metrics (we'll add later if needed)
+    # Enable kube-state-metrics for cluster state metrics
     kube-state-metrics:
-      enabled: false
+      enabled: true
+      # Resource limits for kube-state-metrics
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi
 
     # Disable pushgateway (not needed)
     pushgateway:
