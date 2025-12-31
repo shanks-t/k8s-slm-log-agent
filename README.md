@@ -1,247 +1,208 @@
-# Homelab Log Intelligence Platform
+# Homelab LLM Observability & Evaluation Platform
 
-A Kubernetes-based log intelligence system that combines small language models with retrieval-augmented generation (RAG) to analyze, extract, and summarize logs from a two-node homelab cluster.
+A **production-inspired Kubernetes homelab platform** for serving and evaluating **LLM-powered log analysis workflows**, with first-class observability, reproducible experiments, and rigorous offline evaluation.
 
-## Overview
-
-This project implements a production-inspired observability pipeline that ingests logs from Kubernetes infrastructure and applications, uses vector embeddings for semantic search, and leverages local LLM inference (llama.cpp) to perform structured extraction, triage, and summarization of log data.
-
-**Key Components:**
-- Log collection and storage (Grafana Alloy, Loki)
-- LLM serving layer (llama.cpp with Llama 3.2 3B)
-- FastAPI log analyzer service
-- Vector database for RAG retrieval
-- OpenTelemetry instrumentation
-- Evaluation framework with golden dataset
-
-
-## Using git work trees for multi-agent workflows
-
-Call giit worktree add -b <new-wt-branch> <path-to-working-dr> (must be outside of current .git repo) <branch-to-create-worktree-from>. e.g.
-```sh
-git worktree add -b agent/flux ../a-k8s-slm-log-agent-wt main
-```
-List worktrees:
-```sh
-git worktree list
-```
-e.g. I created a worktree to migrate my project to flux while continuing development on the agent Fastapi service
-```sh
-git worktree list
-/Users/treyshanks/workspace/k8s-slm-log-agent       de51178 [main]
-/Users/treyshanks/workspace/k8s-slm-log-agent-wt-a  de51178 [agent/flux]
-```
-Then cd into worktree and give your agent instructions! e.g.
-```sh
-cd ../../k8s-slm-log-agent-wt-a
-git status
-```
-When you are ready to push your changes from worktree to a remote branch:
-```sh
-cd <worktree>
-git add .
-git commit -m "Agent changes"
-git push -u origin agent/flux
-```
-
-## Local Development
-
-This project uses [`just`](https://just.systems/) as a command runner for development workflows. Just is a modern alternative to Make, designed specifically for running project-specific commands. It provides a clean, ergonomic syntax and works consistently across platforms.
-
-### Why Just?
-
-- **Task runner, not a build system**: Unlike Make, `just` is designed for running commands, not tracking dependencies
-- **No tab vs space confusion**: Uses any whitespace for indentation
-- **Better error messages**: Clear, helpful output when things go wrong
-- **Cross-platform**: Works on Linux, macOS, and Windows
-- **Recipe parameters**: Support for default values and parameterized commands
-
-**Learn more:** [Just Programmer's Manual](https://just.systems/man/en/) | [Recipe Parameters](https://just.systems/man/en/recipe-parameters.html)
-
-### Available Commands
-
-All commands should be run from the repository root:
-
-```bash
-just --list
-Available recipes:
-    build                                              # Output: ghcr.io/${GITHUB_USER}/log-analyzer:latest and :${GIT_SHA}
-    default                                            # Default recipe runs dev
-    deploy                                             # Workflow: Updates deployment.yaml → git commit → git push → flux reconcile
-    dev                                                # Stop with: Ctrl+C or 'just stop'
-    dev-k8s                                            # Note: For one-off tests, use 'just test-k8s-local' (auto-cleanup)
-    evaluate namespace="log-analyzer" duration="1h"    # just evaluate kube-system 1h       # Evaluate last 1 hour
-    push                                               # Requires: 'just build' to have been run first
-    release                                            # Example: just release
-    stop                                               # Safe to run even if nothing is running.
-    stop-k8s                                           # Safe to run even if nothing is running.
-    test                                               # Dependencies are mocked (Loki, LLaMA).
-    test-all                                           # Requires: 'just dev' running in another terminal
-    test-int                                           # Tests use real Loki, LLaMA services via port-forward.
-    test-k8s namespace="log-analyzer" duration="1h"    # just test-k8s namespace=llm duration=24h
-    test-k8s-local namespace="log-analyzer" duration="1h" # just test-k8s-local namespace=llm duration=24h
-    test-stream namespace="kube-system" duration="24h" # just test-stream kube-system 24h  # Last 24 hours of kube-system
-```
-
-## Architecture & Implementation Guide
-
-This section summarizes the architecture for running a Kubernetes-based log intelligence system in a two-node homelab, and provides a phased roadmap for implementation.
-
-The goal is to build a realistic, production-inspired observability + LLM pipeline that supports:
-
-- Structured log ingestion (infra + application)
-- RAG-powered log retrieval
-- LLM-based extraction, triage, and summarization
-- OpenTelemetry instrumentation
-- Evaluation + drift detection with a golden dataset
-- Efficient multi-node workload distribution (Node 1 vs Node 2)
+This project is a **research testbed** for modern **MLOps, platform engineering, and LLM observability**, built entirely with **open-source tools** and designed to mirror real production trade-offs under constrained resources.
 
 ---
 
-# 1. [Cluster Hardware Summary](./docs/node-specs.md)
----
+## Why This Project Exists
 
-# 2. Storage Strategy
+Most LLM demos stop at *“it works.”*  
+Production systems need answers to harder questions:
 
-### **Node 2 Dedicated K8s Storage**
+- Which prompt produced this output?
+- Did a model change silently degrade quality?
+- Can I reproduce this result two weeks from now? 
+- How do I observe LLM behavior using the same primitives as the rest of my stack?
 
-Node 2 has two NVMe drives with different purposes:
+This project explores those questions by:
 
-**Primary NVMe (Sabrent 953.9GB):**
-- Operating system and base system files
-- Mounted at `/`
+- Treating **prompts, datasets, and configs as versioned artifacts**
+- Running **offline, reproducible evaluations** on real cluster logs
+- Using **OpenTelemetry** as the backbone for LLM observability
+- Integrating **LLM inference directly into a Kubernetes control-plane context**
 
-**Secondary NVMe (Samsung MZVPV512 476.9GB):**
-- Dedicated Kubernetes workload storage
-- Mounted at `/mnt/k8s-storage`
-- Purpose: High-I/O workloads requiring fast storage
-- Used for:
-  - Loki log storage and chunks
-  - Vector database (embeddings, indices)
-  - Any persistent volumes for heavy compute workloads
-
-**Rationale:**
-- Separates OS I/O from workload I/O (prevents resource contention)
-- Samsung NVMe dedicated to most I/O-intensive services (Loki, Vector DB)
-- Clean separation makes data management and backup strategies simpler
-- Can wipe/rebuild OS without affecting persistent workload data
-
-**Configuration:**
-```bash
-# Format and mount (one-time setup)
-mkfs.ext4 /dev/nvme1n1
-mkdir -p /mnt/k8s-storage
-mount /dev/nvme1n1 /mnt/k8s-storage
-
-# Add to /etc/fstab for automatic mounting
-echo '/dev/nvme1n1 /mnt/k8s-storage ext4 defaults 0 2' >> /etc/fstab
-```
+It also doubles as hands-on preparation for **CKA-level Kubernetes knowledge** and a practical exploration of state of the art infrastructure management 
 
 ---
 
-# 3. Workload Distribution Strategy
+## What This Demonstrates (for Employers)
 
-To maximize performance and reflect production-grade design patterns:
-
-### **Run heavy compute and storage on Node 2**
-- LLM servers (3B–8B)  
-- Vector DB + embeddings  
-- Loki for log storage  
-- Evaluation / batch jobs  
-
-### **Run control-plane & UX services on Node 1**
-- Kubernetes control plane (API server, controller manager, scheduler)  
-- Ingress controller / API gateway  
-- Grafana dashboards  
-- Log analyzer API (FastAPI)  
-- TODO: OTel Collector (agent + gateway mode)  
-- grafana alloy
-
-### **Rationale**
-- Node 2’s memory bandwidth + NVMe drastically improves LLM and vector DB performance.
-- Node 1’s lighter workload keeps UI + control plane responsive.
-- Isolation ensures LLM inference cannot starve the Kubernetes control plane.
+- **End-to-end MLOps thinking**: ingestion → inference → evaluation → observability  
+- **Strong platform instincts**: separation of control-plane vs workload nodes, storage isolation, GitOps  
+- **Evaluation rigor**: golden datasets, A/B testing, ROUGE + human review  
+- **Observability maturity**: trace–log–metric correlation for LLM workloads  
+- **Judgment under constraints**: small models (llama.cpp), CPU-only inference, homelab realism  
 
 ---
 
-# 3. Logging + Observability Stack Overview
+## System Architecture (High Level)
 
-### **Log Collection**
-- grafana alloy (DaemonSet on both nodes)
-- Ship host, container, and application logs
-- Application logs should be structured JSON for clean extraction
+### Request Flow
 
-### **Log Storage & Query**
-- Loki (running on Node 2)
-  - Persistent volume on NVMe
-  - High ingest and query performance
+1. **FastAPI Log Analyzer**
+   - Queries Loki for structured logs  
+   - Routes requests to the appropriate prompt + model configuration  
 
-### **Metrics & Traces** TODO:
-- OpenTelemetry Collector:
-  - **Agent mode** on both nodes for log collection
-  - **Gateway mode** on Node 1 as central trace+metric router
-- Export:
-  - Traces → Tempo/Jaeger
-  - Metrics → Prometheus
-  - Logs → Loki
+2. **llama.cpp Inference Server**
+   - Runs small LLMs locally (1B–7B)  
 
-### **Dashboards**
-- Grafana on Node 1
-  - Explore logs (Loki)
-  - TODO: Explore traces (Tempo)
-  - TODO: Analyze metrics (Prometheus)
+3. **OpenTelemetry Instrumentation**
+   - Traces prompt selection, rendering, and inference  
+
+4. **Observability Stack**
+   - Logs → Loki  
+   - Traces → Tempo  
+   - Metrics → Prometheus  
+   - Visualization → Grafana  
+
+5. **Offline Evaluation Harness**
+   - Runs experiments against a frozen golden dataset  
+   - Publishes results back into Grafana dashboards  
 
 ---
 
-# 4. LLM-Powered Log Intelligence Layer
+## Core Components
 
-This system provides structured extraction, triage, and summarization of logs using small language models.
+### Kubernetes & GitOps
 
-### **Components on Node 2**
-- llama.cpp deployments (3B + 7B variants)  
-- TODO: Vector DB (Chroma/LanceDB/Qdrant)  
-- TODO: Embedding workers (CPU-optimized)  
+- **Kubernetes** (2-node homelab cluster)
+- **Flux** for GitOps-based reconciliation
+- Explicit **workload placement strategy**:
+  - Control plane + UX on **Node 1**
+  - LLM inference, Loki, and evaluation jobs on **Node 2**
 
-### **Components on Node 1**
-- Log analyzer API (FastAPI)
-  - Routes queries to Loki  
-  - Calls LLM inference → structured extraction  
-  - TODO: Emits OTel spans/metrics  
-- Ingress routing for public/internal access
-- Dashboards for insights
+### LLM Serving
 
-### **Extraction Tasks Supported** TODO:
-- Structured extraction (root cause, component, error signatures)
-- Summaries over time windows
-- Triage ranking of errors
-- “What changed?” comparisons between time windows
-- Pattern detection for app + infra logs
+- **llama.cpp** behind an HTTP API
+- Multiple quantizations tested (Q4, Q8)
+- Model choice driven by **accuracy vs latency trade-offs**, not vibes
 
----
+### Observability (OTel-First)
 
-# 5. Evaluation & Drift Detection TODO:
+- **OpenTelemetry** for tracing LLM requests
+- **Tempo** for trace storage
+- **Loki** for structured logs
+- **Prometheus** for metrics
+- **Grafana** as the unified UI
 
-Current [evals plan](./evals.md)
+> No LLM-specific SaaS required — everything flows through standard telemetry primitives.
 
 ---
 
-# 6. Node Placement Diagram
+## LLM Evaluation Framework (Key Differentiator)
 
-- Node 1 (Lightweight)
-    - K8S Control Plane
-    - Grafana
-    - FastAPI Log Analyzer
-    - OpenTelemetry Collector (Gateway)
-    - Promtail
-    - Ingress Controller
-    - API Gateway / Routing
-    - Misc. management services
+### Golden Dataset
 
--  Node 2 (High Performance)
-    - Llama.cpp Model Servers
-    - Vector Database (Chroma/Lance/Qdrant)
-    - Embedding Workers
-    - Loki (storage + query frontends)
-    - Evaluation CronJobs
-    - Retrieval components
-    - Heavy compute workloads
+- **100% real logs** from my own cluster
+- Manually reviewed and labeled
+- Covers:
+  - `kube-system`
+  - Logging stack
+  - LLM inference failures
+  - GitOps reconciliation issues
+- Frozen and versioned (`golden-v1`, `golden-v2`, …)
+
+Think of this as **unit tests for LLM behavior**.
+
+### Evaluation Methodology
+
+Each experiment is fully reproducible and defined by:
+
+- Dataset version
+- Model + quantization
+- Prompt template + version
+- Sampling parameters (temperature, max tokens)
+
+**Metrics include:**
+
+- Root cause exact match
+- Severity classification accuracy
+- Component detection (F1)
+- ROUGE for summary quality
+- Latency (avg / p95)
+- Token usage
+
+**Results are:**
+
+- Saved per-run with frozen configs
+- Compared via A/B testing
+- Visualized directly in Grafana
+
+---
+
+## Prompt Engineering as a First-Class Artifact
+
+Prompts are treated like **code**:
+
+- Versioned
+- Hashed
+- Reviewed in Git
+- Attributed in OpenTelemetry traces
+
+Each request can be traced back to:
+
+- Prompt ID
+- Prompt version
+- Rendered prompt hash
+- Model configuration
+
+This allows answering:
+
+> *“Which prompt caused this output?”*  
+
+…without storing raw prompt text in telemetry.
+
+---
+
+## Development & Experimentation Workflow
+
+- Local development via **`just`**
+- **Git worktrees** for parallel agent / feature work
+- Offline evaluations run locally or as **Kubernetes CronJobs**
+- **Flux** reconciles infrastructure + application state
+
+This enables **fast iteration without sacrificing reproducibility**.
+
+---
+
+## Roadmap (Condensed)
+
+### Short Term
+- Complete offline evaluation harness
+- Finalize prompt registry + intent-based routing
+
+### Medium Term
+- Full trace–log–metric correlation for LLM requests
+- Grafana dashboards for:
+  - Accuracy drift
+  - Prompt comparisons
+  - Model trade-offs
+
+### Long Term
+- Deep Kubernetes administration mastery
+- Explore *“infra as data”* using CRDs + custom controllers
+- Treat cluster state itself as LLM input
+
+---
+
+## Why This Is Built on OpenTelemetry (Not LLM SaaS)
+
+LLM-specific observability platforms add value — but:
+
+**OTel already provides:**
+- Distributed traces
+- Correlated logs + metrics
+- Vendor-neutral instrumentation
+
+This project demonstrates that you can achieve **80–90% of the value** using open standards — **without locking into a proprietary control plane**.
+
+The remaining gap (prompt UIs, human feedback loops) is intentionally explored as a **design problem**, not outsourced.
+
+---
+
+## Status
+
+This project is **actively evolving**.  
+Design decisions are documented intentionally — including trade-offs and TODOs — to reflect **real production thinking**, not a polished demo.
