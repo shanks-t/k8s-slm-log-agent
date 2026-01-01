@@ -34,9 +34,9 @@ dev: stop
     echo $! >> {{dev_pids}}
 
     echo "Waiting for dependencies..."
-    helpers/wait-for.sh http://localhost:3100/ready
-    helpers/wait-for.sh http://localhost:8080/v1/models
-    helpers/wait-for.sh http://localhost:3200/ready
+    just-helpers/wait-for.sh http://localhost:3100/ready
+    just-helpers/wait-for.sh http://localhost:8080/v1/models
+    just-helpers/wait-for.sh http://localhost:3200/ready
 
     echo "Starting FastAPI..."
     # When script exits (including ctrl-c), run 'just stop' for clean shutdown
