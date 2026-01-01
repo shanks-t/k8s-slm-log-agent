@@ -21,6 +21,7 @@ alias e := evaluate
 # Network flow: Mac FastAPI → localhost ports → K8s services
 # Use case: Local development with fast iteration
 # Stop with: Ctrl+C or 'just stop'
+[group('local')]
 dev: stop
     #!/usr/bin/env bash
     set -euo pipefail
@@ -54,6 +55,7 @@ dev: stop
 #
 # Kills port-forward processes started by 'just dev' or 'just dev-k8s'.
 # Safe to run even if nothing is running.
+[group('local')]
 stop:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -75,6 +77,7 @@ stop:
 #
 # Fast tests that don't require Kubernetes services.
 # Dependencies are mocked (Loki, LLaMA).
+[group('test')]
 test:
     @echo "Running unit tests..."
     @cd workloads/log-analyzer && uv run pytest -v
@@ -83,6 +86,7 @@ test:
 #
 # Requires: 'just dev' running in another terminal
 # Tests use real Loki, LLaMA services via port-forward.
+[group('test')]
 test-int:
     @echo "Running integration tests..."
     @cd workloads/log-analyzer && uv run pytest -m integration -v
@@ -90,6 +94,7 @@ test-int:
 # Run all tests (unit + integration)
 #
 # Requires: 'just dev' running in another terminal
+[group('test')]
 test-all:
     @echo "Running all tests..."
     @cd workloads/log-analyzer && uv run pytest -m "" -v
@@ -108,6 +113,7 @@ test-all:
 #   just test-stream llm info 30m         # Info logs from last 30 minutes
 #   just test-stream llm error 2h         # Error logs from last 2 hours
 #   just test-stream kube-system all 24h  # All logs from last 24 hours
+[group('local')]
 test-stream namespace="kube-system" severity="all" duration="24h":
     @just-helpers/test-stream.sh {{namespace}} {{severity}} {{duration}}
 
@@ -124,6 +130,7 @@ test-stream namespace="kube-system" severity="all" duration="24h":
 #   just analyze llm info 30m         # Info logs from last 30 minutes
 #   just analyze llm error 2h         # Error logs from last 2 hours
 #   just analyze kube-system all 24h  # All logs from last 24 hours
+[group('local')]
 analyze namespace="log-analyzer" severity="all" duration="1h":
     @just-helpers/analyze.sh {{namespace}} {{severity}} {{duration}}
 
@@ -136,6 +143,7 @@ analyze namespace="log-analyzer" severity="all" duration="1h":
 #
 # Examples:
 #   just analyze-k8s llm error 1h     # Error logs from LLM namespace
+[group('k8s')]
 analyze-k8s namespace="log-analyzer" severity="all" duration="1h":
     @just-helpers/analyze-k8s.sh {{namespace}} {{severity}} {{duration}}
 
@@ -151,6 +159,7 @@ analyze-k8s namespace="log-analyzer" severity="all" duration="1h":
 #   just loki-query llm                # All logs
 #   just loki-query llm info 30m       # Info-level logs
 #   just loki-query llm error 1h 50    # Last 50 error logs
+[group('local')]
 loki-query namespace="log-analyzer" severity="all" duration="1h" limit="15":
     @just-helpers/loki-query.sh {{namespace}} {{severity}} {{duration}} {{limit}}
 
@@ -160,6 +169,7 @@ loki-query namespace="log-analyzer" severity="all" duration="1h" limit="15":
 # Shows what labels exist and example values for filtering
 #
 # Use case: Understanding what you can filter on in LogQL queries
+[group('local')]
 loki-labels:
     @just-helpers/loki-labels.sh
 
@@ -167,6 +177,7 @@ loki-labels:
 #
 # Requires: 'just dev' running
 # Returns JSON with service status and version
+[group('local')]
 health:
     @echo "Checking local log-analyzer health..."
     @curl -s http://localhost:8000/health | jq .
@@ -174,6 +185,7 @@ health:
 # Check DEPLOYED log-analyzer health
 #
 # Queries deployed service health from inside Kubernetes
+[group('k8s')]
 health-k8s:
     @echo "Checking deployed log-analyzer health..."
     @kubectl exec -n log-analyzer deploy/log-analyzer -- curl -s localhost:8000/health | jq .
@@ -187,6 +199,7 @@ health-k8s:
 # Network flow: Mac → localhost:8000 → port-forward → K8s log-analyzer
 # Use case: Interactive debugging, multiple manual curl requests
 # Note: For one-off tests, use 'just test-k8s-local' (auto-cleanup)
+[group('k8s')]
 dev-k8s: stop-k8s
     #!/usr/bin/env bash
     set -euo pipefail
@@ -209,6 +222,7 @@ dev-k8s: stop-k8s
 #
 # Stops port-forward created by 'just dev-k8s'.
 # Safe to run even if nothing is running.
+[group('k8s')]
 stop-k8s:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -236,6 +250,7 @@ stop-k8s:
 #   just test-k8s llm                      # Last 1 hour (default)
 #   just test-k8s llm 30m                  # Last 30 minutes
 #   just test-k8s namespace=llm duration=24h
+[group('k8s')]
 test-k8s namespace="log-analyzer" duration="1h":
     @just-helpers/test-k8s.sh {{namespace}} {{duration}}
 
@@ -249,6 +264,7 @@ test-k8s namespace="log-analyzer" duration="1h":
 #   just test-k8s-local llm                      # Last 1 hour (default)
 #   just test-k8s-local llm 30m                  # Last 30 minutes
 #   just test-k8s-local namespace=llm duration=24h
+[group('k8s')]
 test-k8s-local namespace="log-analyzer" duration="1h":
     @just-helpers/test-k8s-local.sh {{namespace}} {{duration}}
 
@@ -269,6 +285,7 @@ test-k8s-local namespace="log-analyzer" duration="1h":
 # Examples:
 #   just evaluate llm 30m              # Evaluate last 30 min of llm namespace
 #   just evaluate kube-system 1h       # Evaluate last 1 hour
+[group('eval')]
 evaluate namespace="log-analyzer" duration="1h":
     @uv run python just-helpers/evaluate.py {{namespace}} {{duration}}
 
@@ -279,6 +296,7 @@ evaluate namespace="log-analyzer" duration="1h":
 #
 # Requires: .env file with GITHUB_USER defined
 # Output: ghcr.io/${GITHUB_USER}/log-analyzer:latest and :${GIT_SHA}
+[group('cicd')]
 build:
     @just-helpers/build.sh
 
@@ -289,6 +307,7 @@ build:
 #
 # Requires: .env file with GITHUB_USER and GHCR_TOKEN
 # Requires: 'just build' to have been run first
+[group('cicd')]
 push:
     @just-helpers/push.sh
 
@@ -299,6 +318,7 @@ push:
 #
 # Requires: .env file with GITHUB_USER
 # Workflow: Updates deployment.yaml → git commit → git push → flux reconcile
+[group('cicd')]
 deploy:
     @just-helpers/deploy.sh
 
@@ -308,6 +328,7 @@ deploy:
 #
 # Use case: Release a new version of log-analyzer
 # Example: just release
+[group('cicd')]
 release: build push deploy
     @echo ""
     @echo "✓ Release complete!"
@@ -346,5 +367,6 @@ release: build push deploy
 #
 # CKA Exam Note: ConfigMaps are part of the Storage domain (10% of exam).
 # This recipe demonstrates declarative ConfigMap creation and deployment.
+[group('utils')]
 dashboard-cm name:
     @just-helpers/dashboard-cm.sh {{name}}
