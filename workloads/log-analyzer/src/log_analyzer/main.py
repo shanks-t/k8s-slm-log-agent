@@ -85,6 +85,17 @@ async def analyze_logs(request: AnalyzeRequest):
 
         query = build_logql_query(request.filters)
 
+        # Log the actual LogQL query for debugging severity filters
+        logger.info(
+            "Executing LogQL query",
+            extra={
+                "extra_fields": {
+                    "query": query,
+                    "severity": request.filters.severity,
+                }
+            },
+        )
+
         params = {
             "query": query,
             "limit": request.limit,
@@ -197,6 +208,17 @@ async def analyze_logs_stream(request: AnalyzeRequest):
             )
 
             query = build_logql_query(request.filters)
+
+            # Log the actual LogQL query for debugging severity filters
+            logger.info(
+                "Executing LogQL query",
+                extra={
+                    "extra_fields": {
+                        "query": query,
+                        "severity": request.filters.severity,
+                    }
+                },
+            )
 
             params = {
                 "query": query,

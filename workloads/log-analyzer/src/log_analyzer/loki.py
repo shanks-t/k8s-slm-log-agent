@@ -7,16 +7,17 @@
 #   Use case: Understanding what the system is doing during normal operation
 #
 # - "error": Logs indicating actual problems or failures
-#   Includes: ERROR, FATAL, CRITICAL, exceptions, failures, panics, crashes
+#   Includes: ERROR, FATAL, CRITICAL, WARNING, exceptions, failures, panics, crashes
 #   Use case: Troubleshooting issues, finding root causes
 #
 # - "all": No filtering, return everything
 #   Use case: Comprehensive analysis when you don't know what you're looking for
 #
 # Note: Patterns use case-insensitive matching (?i) to handle variations
+# Patterns match both structured JSON logs (e.g. "level": "ERROR") and plaintext logs
 SEVERITY_PATTERNS = {
-    "info": r'(?i)(INFO|DEBUG|TRACE|successful|started|completed|ready)',
-    "error": r'(?i)(ERROR|FATAL|CRITICAL|EXCEPTION|failed|failure|panic|crash|killed|terminated)',
+    "info": r'(?i)(INFO|DEBUG|TRACE|"level":\s*"(INFO|DEBUG|TRACE)"|successful|started|completed|ready)',
+    "error": r'(?i)(ERROR|FATAL|CRITICAL|WARNING|"level":\s*"(ERROR|FATAL|CRITICAL|WARNING)"|EXCEPTION|failed|failure|panic|crash|killed|terminated)',
     "all": None,  # No filter applied
 }
 
