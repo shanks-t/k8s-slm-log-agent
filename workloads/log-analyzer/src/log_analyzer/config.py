@@ -8,7 +8,10 @@ class Settings(BaseSettings):
 
     # Service configuration
     service_name: str = "log-analyzer"
+    service_version: str = "0.1.0"
     log_level: str = "INFO"
+
+    model_name: str = "llama-3.2-3b-instruct"
 
     # Loki configuration
     loki_url: str = "http://loki.logging.svc.cluster.local:3100"

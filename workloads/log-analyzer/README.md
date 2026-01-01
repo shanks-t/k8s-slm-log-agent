@@ -157,14 +157,33 @@ Response models will be introduced **only when**:
 
 ## Configuration
 
-All configuration is environment‑driven (via Kubernetes ConfigMap or `.env`).
+All configuration is environment‑driven, following the [12-factor app methodology](https://12factor.net/config). This allows the same code to run in both Kubernetes and local development with different runtime configurations.
 
-Key variables:
+### Environment Variables
 
-* `LOKI_URL` — Loki service endpoint
-* `LLAMA_URL` — LLaMA.cpp endpoint
-* `MODEL_NAME` — model identifier
-* `OTEL_EXPORTER_OTLP_ENDPOINT` — Tempo OTLP endpoint
+All settings use the `LOG_ANALYZER_` prefix and are defined in [`config.py`](src/log_analyzer/config.py):
+
+* `LOG_ANALYZER_LOKI_URL` — Loki service endpoint (default: `http://loki.logging.svc.cluster.local:3100`)
+* `LOG_ANALYZER_LLM_URL` — LLaMA.cpp endpoint (default: `http://llama-cpp.llm.svc.cluster.local:8080`)
+* `LOG_ANALYZER_SERVICE_NAME` — Service name for telemetry (default: `log-analyzer`)
+* `LOG_ANALYZER_LOG_LEVEL` — Logging level (default: `INFO`)
+* `LOG_ANALYZER_OTEL_ENABLED` — Enable OpenTelemetry (default: `true`)
+
+### Local Development Setup
+
+For local development with `just dev`, create a `.env` file in the `workloads/log-analyzer/` directory:
+
+```bash
+# workloads/log-analyzer/.env
+LOG_ANALYZER_LOKI_URL=http://localhost:3100
+LOG_ANALYZER_LLM_URL=http://localhost:8080
+```
+
+The `just dev` command port-forwards Kubernetes services to localhost, so the local FastAPI server needs to use `localhost` URLs instead of Kubernetes DNS names.
+
+### Kubernetes Deployment
+
+In Kubernetes, the default values use cluster DNS (e.g., `loki.logging.svc.cluster.local`), which are automatically resolved by the cluster's DNS service. No `.env` file is needed — configuration is injected via ConfigMaps or the deployment manifest.
 
 ---
 

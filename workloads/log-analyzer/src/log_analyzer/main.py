@@ -1,9 +1,6 @@
 """FastAPI application for log analysis and extraction."""
 
 from contextlib import asynccontextmanager
-import json
-import os
-from uuid import MAX
 import httpx
 from datetime import datetime, UTC
 
@@ -14,11 +11,10 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from log_analyzer.models.requests import AnalyzeRequest
 from log_analyzer.observability import setup_telemetry, get_tracer
 from log_analyzer.observability.logging import setup_logging, get_logger
-
-# Read from environment variables (set by k8s ConfigMap or default to localhost for local dev)
-LOKI_URL = os.getenv("LOKI_URL", "http://localhost:3100")
-LLAMA_URL = os.getenv("LLAMA_URL", "http://localhost:8080")
-MODEL_NAME = os.getenv("MODEL_NAME", "llama-3.2-3b-instruct")
+from log_analyzer.loki import build_logql_query
+from log_analyzer.pipeline import normalize_log, build_llm_prompt, build_text_header
+from log_analyzer.llm import stream_llm, call_llm
+from log_analyzer.config import settings
 
 # Initialize structured logging with trace context
 setup_logging(level="INFO")
@@ -32,8 +28,8 @@ tracer = get_tracer(__name__)
 async def check_dependencies(app: FastAPI):
     # startup phase
     async with httpx.AsyncClient(timeout=2) as client:
-        await client.get(f"{LOKI_URL}/ready")
-        await client.get(f"{LLAMA_URL}/v1/models")
+        await client.get(f"{settings.loki_url}/ready")
+        await client.get(f"{settings.llm_url}/v1/models")
 
     # hand conrol back to FastAPI
     yield
@@ -66,134 +62,6 @@ async def health():
     }
 
 
-def build_logql_query(filters) -> str:
-    """Build LogQL query from filters."""
-    # Build label selector
-    labels = []
-    # ignore loki logs
-    labels.append('container!="loki"')
-    if filters.namespace:
-        labels.append(f'namespace="{filters.namespace}"')
-    if filters.pod:
-        labels.append(f'pod=~"{filters.pod}"')  # Use regex match
-    if filters.container:
-        labels.append(f'container="{filters.container}"')
-    if filters.node:
-        labels.append(f'node="{filters.node}"')
-
-    # Start with label matcher
-    query = "{" + ",".join(labels) + "}" if labels else '{job=~".+"}'
-
-    # Add log line filter if provided
-    if filters.log_filter:
-        query += f' |~ "{filters.log_filter}"'
-    # No default filter - noise is already filtered at Alloy ingestion level
-    # Alloy drops: health checks, successful access logs (200), k8s probes
-    # This allows operational logs (slot updates, cancellations, etc.) to be analyzed
-
-    return query
-
-
-def normalize_log(entry):
-    labels = entry["labels"]
-    return {
-        "time": entry["timestamp"],
-        "source": f"{labels.get('namespace')}/{labels.get('container')}",
-        "pod": labels.get("pod"),
-        "node": labels.get("node"),
-        "message": entry["message"],
-    }
-
-
-def build_llm_prompt(normalized_logs, time_range):
-    header = (
-        f"Cluster: homelab\n"
-        f"Time window: {time_range.start.isoformat()} → {time_range.end.isoformat()}\n\n"
-        "Logs:\n"
-    )
-
-    lines = []
-    for log in normalized_logs:
-        lines.append(
-            f"[{log['time']}] {log['source']} "
-            f"(pod={log.get('pod')}, node={log.get('node')})\n"
-            f"{log['message']}"
-        )
-
-    return header + "\n\n".join(lines)
-
-
-async def call_llm(prompt: str):
-    # Create a span to trace the LLM call
-    with tracer.start_as_current_span("call_llm") as llm_span:
-        # Add LLM-specific attributes for debugging
-        llm_span.set_attribute("llm.model", MODEL_NAME)
-        llm_span.set_attribute("llm.max_tokens", 150)
-        llm_span.set_attribute("llm.temperature", 0.3)
-        llm_span.set_attribute("llm.streaming", False)
-        llm_span.set_attribute("llm.provider", "llama-cpp")
-
-        logger.info(
-            "Calling LLM for analysis",
-            extra={
-                "extra_fields": {
-                    "model": MODEL_NAME,
-                    "max_tokens": 150,
-                    "temperature": 0.3,
-                }
-            },
-        )
-
-        timeout = httpx.Timeout(
-            connect=5.0,
-            write=5.0,
-            pool=5.0,
-            read=180.0,
-        )
-        payload = {
-            "model": MODEL_NAME,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a Kubernetes reliability engineer. "
-                        "Analyze logs and identify root cause, severity, "
-                        "and recommended actions."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": prompt,
-                },
-            ],
-            "max_tokens": 150,
-            "temperature": 0.3,
-        }
-
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(
-                f"{LLAMA_URL}/v1/chat/completions",
-                json=payload,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-
-        content = data["choices"][0]["message"]["content"]
-
-        # Record tokens used (if available in response)
-        if "usage" in data:
-            llm_span.set_attribute("llm.tokens_prompt", data["usage"].get("prompt_tokens", 0))
-            llm_span.set_attribute("llm.tokens_completion", data["usage"].get("completion_tokens", 0))
-            llm_span.set_attribute("llm.tokens_total", data["usage"].get("total_tokens", 0))
-
-        logger.info(
-            "LLM call complete",
-            extra={"extra_fields": {"response_length": len(content)}},
-        )
-
-        return content
-
-
 @app.post("/v1/analyze")
 async def analyze_logs(request: AnalyzeRequest):
     with tracer.start_as_current_span("analyze_logs") as span:
@@ -202,8 +70,7 @@ async def analyze_logs(request: AnalyzeRequest):
         span.set_attribute("log_limit", request.limit)
         span.set_attribute(
             "time_range_hours",
-            (request.time_range.end - request.time_range.start).total_seconds()
-            / 3600,
+            (request.time_range.end - request.time_range.start).total_seconds() / 3600,
         )
 
         logger.info(
@@ -235,7 +102,7 @@ async def analyze_logs(request: AnalyzeRequest):
 
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.get(
-                    f"{LOKI_URL}/loki/api/v1/query_range",
+                    f"{settings.loki_url}/loki/api/v1/query_range",
                     params=params,
                 )
                 resp.raise_for_status()
@@ -303,107 +170,6 @@ async def analyze_logs(request: AnalyzeRequest):
         }
 
 
-def build_text_header(normalized_logs, time_range):
-    lines = [
-        "=== Log Analyzer ===",
-        "Cluster: homelab",
-        f"Time Window: {time_range.start.date()} → {time_range.end.date()}",
-        f"Log Count: {len(normalized_logs)}",
-        "",
-        "--- Logs ---",
-    ]
-
-    for log in normalized_logs:
-        lines.append(
-            f"[{log['time']}] {log['source']} "
-            f"(pod={log.get('pod')}, node={log.get('node')})"
-        )
-        lines.append(log["message"])
-        lines.append("")
-
-    lines.append("--- Analysis ---")
-    lines.append("")  # blank line before streaming starts
-    return "\n".join(lines)
-
-
-async def stream_llm(prompt: str):
-    MAX_TOKENS = 200
-    # Create a span to trace the LLM streaming call
-    with tracer.start_as_current_span("call_llm") as llm_span:
-        # Add LLM-specific attributes for debugging
-        llm_span.set_attribute("llm.model", MODEL_NAME)
-        llm_span.set_attribute("llm.max_tokens", 200)
-        llm_span.set_attribute("llm.temperature", 0.3)
-        llm_span.set_attribute("llm.streaming", True)
-        llm_span.set_attribute("llm.provider", "llama-cpp")
-
-        logger.info(
-            "Calling LLM for analysis",
-            extra={
-                "extra_fields": {
-                    "model": MODEL_NAME,
-                    "max_tokens": 200,
-                    "temperature": 0.3,
-                }
-            },
-        )
-
-        timeout = httpx.Timeout(
-            connect=5.0,
-            write=5.0,
-            pool=5.0,
-            read=None,  # IMPORTANT: disable read timeout for streaming
-        )
-
-        tokens_generated = 0
-
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            async with client.stream(
-                "POST",
-                f"{LLAMA_URL}/v1/chat/completions",
-                json={
-                    "model": MODEL_NAME,
-                    "stream": True,
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": (
-                                "You are a Kubernetes reliability engineer.\n"
-                                "Analyze logs and identify whether action is required.\n"
-                                "If logs are informational, clearly say so.\n"
-                                "Write plain text, not Markdown."
-                            ),
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
-                    "max_tokens": 200,
-                    "temperature": 0.3,
-                },
-            ) as resp:
-                async for line in resp.aiter_lines():
-                    if not line.startswith("data:"):
-                        continue
-
-                    data = line.removeprefix("data: ").strip()
-                    if data == "[DONE]":
-                        break
-
-                    payload = json.loads(data)
-                    delta = payload["choices"][0].get("delta", {})
-                    content = delta.get("content")
-                    if content:
-                        tokens_generated += 1
-                        yield content
-
-        # Record total tokens generated
-        llm_span.set_attribute("llm.tokens_generated", tokens_generated)
-
-        logger.info(
-            "LLM streaming complete",
-            extra={"extra_fields": {"tokens_generated": tokens_generated}},
-        )
-
-
 @app.post("/v1/analyze/stream")
 async def analyze_logs_stream(request: AnalyzeRequest):
     async def event_stream():
@@ -449,7 +215,7 @@ async def analyze_logs_stream(request: AnalyzeRequest):
 
                 async with httpx.AsyncClient(timeout=10) as client:
                     resp = await client.get(
-                        f"{LOKI_URL}/loki/api/v1/query_range",
+                        f"{settings.loki_url}/loki/api/v1/query_range",
                         params=params,
                     )
                     resp.raise_for_status()
