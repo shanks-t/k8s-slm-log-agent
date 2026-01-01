@@ -21,10 +21,14 @@ class LogFilters(BaseModel):
     container: Optional[str] = Field(None, description="Container name filter")
     node: Optional[str] = Field(None, description="Node name filter")
     severity: Optional[str] = Field(
-        None, description="Log severity filter (info|warn|error|critical)"
+        None,
+        description=(
+            "Simplified severity filter using query-time pattern matching. "
+            "Options: 'info' (normal operations), 'error' (failures/problems), 'all' (no filter)"
+        ),
     )
     log_filter: Optional[str] = Field(
-        None, description="Regex pattern to match in log lines"
+        None, description="Custom regex pattern to match in log lines"
     )
 
 
