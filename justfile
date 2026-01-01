@@ -247,12 +247,12 @@ stop-k8s:
 # Note: Slower (~5-10s) due to pod creation/deletion
 #
 # Examples:
-#   just test-k8s llm                      # Last 1 hour (default)
-#   just test-k8s llm 30m                  # Last 30 minutes
-#   just test-k8s namespace=llm duration=24h
+#   just test-k8s llm                       # All logs, last 1 hour (default)
+#   just test-k8s llm error 30m             # Error logs, last 30 minutes
+#   just test-k8s llm info 24h              # Info logs, last 24 hours
 [group('k8s')]
-test-k8s namespace="log-analyzer" duration="1h":
-    @just-helpers/test-k8s.sh {{namespace}} {{duration}}
+test-k8s namespace="log-analyzer" severity="all" duration="1h":
+    @just-helpers/test-k8s.sh {{namespace}} {{severity}} {{duration}}
 
 # Test DEPLOYED log-analyzer via port-forward from your Mac
 #
@@ -261,12 +261,12 @@ test-k8s namespace="log-analyzer" duration="1h":
 # Use case: Quick testing of deployed service without manual port-forward management
 #
 # Examples:
-#   just test-k8s-local llm                      # Last 1 hour (default)
-#   just test-k8s-local llm 30m                  # Last 30 minutes
-#   just test-k8s-local namespace=llm duration=24h
+#   just test-k8s-local llm                      # All logs, last 1 hour (default)
+#   just test-k8s-local llm error 30m            # Error logs, last 30 minutes
+#   just test-k8s-local llm info 24h             # Info logs, last 24 hours
 [group('k8s')]
-test-k8s-local namespace="log-analyzer" duration="1h":
-    @just-helpers/test-k8s-local.sh {{namespace}} {{duration}}
+test-k8s-local namespace="log-analyzer" severity="all" duration="1h":
+    @just-helpers/test-k8s-local.sh {{namespace}} {{severity}} {{duration}}
 
 # Evaluate log-analyzer by comparing LLM analysis with raw Loki logs
 #
