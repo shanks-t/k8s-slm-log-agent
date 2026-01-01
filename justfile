@@ -7,6 +7,12 @@ dev_pids := ".dev-pids"
 # Default recipe runs dev
 default: dev
 
+# Recipe aliases for quick access
+alias stream := test-stream
+alias s := test-stream
+alias a := analyze
+alias e := evaluate
+
 # Start local development environment
 #
 # Port-forwards Kubernetes services (Loki, LLaMA, Tempo) to localhost,
@@ -89,17 +95,88 @@ test-all:
     @cd workloads/log-analyzer && uv run pytest -m "" -v
 
 
-# Test LOCAL FastAPI server with Kubernetes dependencies
+# Test LOCAL FastAPI server with streaming output
 #
 # Requires: 'just dev' running in another terminal
+# Returns formatted text output streamed in real-time
 # Network flow: Mac curl → Mac FastAPI (localhost:8000) → K8s services
-# Use case: Test local code changes with real K8s data
+#
+# Use case: Interactive log analysis, human-readable output
 #
 # Examples:
-#   just test-stream llm 30m          # Last 30 minutes of llm namespace
-#   just test-stream kube-system 24h  # Last 24 hours of kube-system
-test-stream namespace="kube-system" duration="24h":
-    @just-helpers/test-stream.sh {{namespace}} {{duration}}
+#   just test-stream llm                  # All logs (default: last 24h)
+#   just test-stream llm info 30m         # Info logs from last 30 minutes
+#   just test-stream llm error 2h         # Error logs from last 2 hours
+#   just test-stream kube-system all 24h  # All logs from last 24 hours
+test-stream namespace="kube-system" severity="all" duration="24h":
+    @just-helpers/test-stream.sh {{namespace}} {{severity}} {{duration}}
+
+# Analyze logs via LOCAL server (non-streaming JSON response)
+#
+# Requires: 'just dev' running in another terminal
+# Returns structured JSON with log_count, analysis, and logs array
+# Network flow: Mac curl → Mac FastAPI (localhost:8000) → K8s services
+#
+# Use case: Programmatic analysis, scripting, testing JSON API
+#
+# Examples:
+#   just analyze llm                  # All logs (default: last 1h)
+#   just analyze llm info 30m         # Info logs from last 30 minutes
+#   just analyze llm error 2h         # Error logs from last 2 hours
+#   just analyze kube-system all 24h  # All logs from last 24 hours
+analyze namespace="log-analyzer" severity="all" duration="1h":
+    @just-helpers/analyze.sh {{namespace}} {{severity}} {{duration}}
+
+# Analyze logs via DEPLOYED log-analyzer (non-streaming JSON)
+#
+# Creates ephemeral curl pod inside Kubernetes to test deployed service
+# Network flow: curl pod (in K8s) → K8s service DNS → log-analyzer pod
+#
+# Use case: Validate deployed service, CI/CD testing
+#
+# Examples:
+#   just analyze-k8s llm error 1h     # Error logs from LLM namespace
+analyze-k8s namespace="log-analyzer" severity="all" duration="1h":
+    @just-helpers/analyze-k8s.sh {{namespace}} {{severity}} {{duration}}
+
+# Query Loki directly (bypass LLM analysis)
+#
+# Requires: 'just dev' running for port-forward to Loki
+# Returns raw logs with timestamp and labels
+# Network flow: Mac curl → localhost:3100 (Loki)
+#
+# Use case: Debugging LogQL queries, understanding log structure, fast log inspection
+#
+# Examples:
+#   just loki-query llm                # All logs
+#   just loki-query llm info 30m       # Info-level logs
+#   just loki-query llm error 1h 50    # Last 50 error logs
+loki-query namespace="log-analyzer" severity="all" duration="1h" limit="15":
+    @just-helpers/loki-query.sh {{namespace}} {{severity}} {{duration}} {{limit}}
+
+# Discover available Loki labels and values
+#
+# Requires: 'just dev' running for port-forward to Loki
+# Shows what labels exist and example values for filtering
+#
+# Use case: Understanding what you can filter on in LogQL queries
+loki-labels:
+    @just-helpers/loki-labels.sh
+
+# Check LOCAL log-analyzer health
+#
+# Requires: 'just dev' running
+# Returns JSON with service status and version
+health:
+    @echo "Checking local log-analyzer health..."
+    @curl -s http://localhost:8000/health | jq .
+
+# Check DEPLOYED log-analyzer health
+#
+# Queries deployed service health from inside Kubernetes
+health-k8s:
+    @echo "Checking deployed log-analyzer health..."
+    @kubectl exec -n log-analyzer deploy/log-analyzer -- curl -s localhost:8000/health | jq .
 
 # Port-forward DEPLOYED log-analyzer service to localhost
 #
