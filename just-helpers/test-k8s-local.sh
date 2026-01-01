@@ -6,7 +6,7 @@ NAMESPACE="$1"
 DURATION="$2"
 
 # Calculate time range
-source helpers/calc-time-range.sh "$DURATION"
+source just-helpers/calc-time-range.sh "$DURATION"
 
 echo "Setting up port-forward to log-analyzer..."
 
@@ -19,7 +19,7 @@ trap "echo 'Cleaning up port-forward...'; kill $PF_PID 2>/dev/null || true" EXIT
 
 # Wait for port-forward to be ready
 echo "Waiting for port-forward..."
-helpers/wait-for.sh http://localhost:8000/health
+just-helpers/wait-for.sh http://localhost:8000/health
 
 echo "Testing log-analyzer (namespace: $NAMESPACE, duration: $DURATION)"
 echo "Time range: $START → $END"

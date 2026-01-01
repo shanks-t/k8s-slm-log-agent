@@ -14,34 +14,42 @@ echo "Analyzing logs via Kubernetes (namespace: $NAMESPACE, severity: $SEVERITY,
 echo "Time range: $START → $END"
 echo ""
 
-# Build JSON payload
+# Build JSON payload and write to temp file to avoid shell escaping issues
+TMPFILE=$(mktemp)
+trap "rm -f $TMPFILE" EXIT
+
 if [ "$SEVERITY" = "all" ]; then
-    PAYLOAD="{
-        \\\"time_range\\\": {
-            \\\"start\\\": \\\"$START\\\",
-            \\\"end\\\": \\\"$END\\\"
-        },
-        \\\"filters\\\": {
-            \\\"namespace\\\": \\\"$NAMESPACE\\\"
-        },
-        \\\"limit\\\": 15
-    }"
+    cat > "$TMPFILE" <<EOF
+{
+  "time_range": {
+    "start": "$START",
+    "end": "$END"
+  },
+  "filters": {
+    "namespace": "$NAMESPACE"
+  },
+  "limit": 15
+}
+EOF
 else
-    PAYLOAD="{
-        \\\"time_range\\\": {
-            \\\"start\\\": \\\"$START\\\",
-            \\\"end\\\": \\\"$END\\\"
-        },
-        \\\"filters\\\": {
-            \\\"namespace\\\": \\\"$NAMESPACE\\\",
-            \\\"severity\\\": \\\"$SEVERITY\\\"
-        },
-        \\\"limit\\\": 15
-    }"
+    cat > "$TMPFILE" <<EOF
+{
+  "time_range": {
+    "start": "$START",
+    "end": "$END"
+  },
+  "filters": {
+    "namespace": "$NAMESPACE",
+    "severity": "$SEVERITY"
+  },
+  "limit": 15
+}
+EOF
 fi
 
 # Test via kubectl run to call from inside the cluster
-kubectl run analyze-test --rm -i --tty --image=curlimages/curl --restart=Never -- \
-  curl -X POST "http://log-analyzer.log-analyzer.svc.cluster.local:8000/v1/analyze" \
-  -H "Content-Type: application/json" \
-  -d "$PAYLOAD"
+# Use kubectl cp to transfer JSON, then curl it
+kubectl run analyze-test --rm -i --image=curlimages/curl --restart=Never -- \
+  sh -c "cat <<'JSONEOF' | curl -X POST 'http://log-analyzer.log-analyzer.svc.cluster.local:8000/v1/analyze' -H 'Content-Type: application/json' -d @-
+$(cat "$TMPFILE")
+JSONEOF"

@@ -6,7 +6,7 @@ NAMESPACE="$1"
 DURATION="$2"
 
 # Calculate time range
-source helpers/calc-time-range.sh "$DURATION"
+source just-helpers/calc-time-range.sh "$DURATION"
 
 echo "Testing log-analyzer in Kubernetes (namespace: $NAMESPACE, duration: $DURATION)"
 echo "Time range: $START → $END"
