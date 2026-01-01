@@ -20,20 +20,21 @@ class LogFilters(BaseModel):
     pod: Optional[str] = Field(None, description="Pod name filter (supports wildcards)")
     container: Optional[str] = Field(None, description="Container name filter")
     node: Optional[str] = Field(None, description="Node name filter")
-    severity: Optional[str] = Field(None, description="Log severity filter (info|warn|error|critical)")
-    log_filter: Optional[str] = Field(None, description="Regex pattern to match in log lines")
+    severity: Optional[str] = Field(
+        None, description="Log severity filter (info|warn|error|critical)"
+    )
+    log_filter: Optional[str] = Field(
+        None, description="Regex pattern to match in log lines"
+    )
 
 
 class AnalyzeRequest(BaseModel):
     """Request to analyze logs."""
 
     time_range: TimeRange = Field(..., description="Time range for log query")
-    filters: LogFilters = Field(default_factory=LogFilters, description="Optional filters")
-    limit: int = Field(15, ge=1, le=200, description="Maximum number of logs to retrieve")
-
-
-class EvaluateRequest(BaseModel):
-    """Request to run evaluation on golden dataset."""
-
-    dataset_path: Optional[str] = Field(None, description="Path to golden dataset JSON file")
-    sample_limit: Optional[int] = Field(None, ge=1, description="Limit number of samples to evaluate")
+    filters: LogFilters = Field(
+        default_factory=LogFilters, description="Optional filters"
+    )
+    limit: int = Field(
+        15, ge=1, le=200, description="Maximum number of logs to retrieve"
+    )

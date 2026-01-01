@@ -110,7 +110,8 @@
       "Bash(md5:*)",
       "Bash(bash -x just-helpers/dashboard-cm.sh:*)",
       "Bash(tee:*)",
-      "Bash(bash:*)"
+      "Bash(bash:*)",
+      "Skill(deliberate-practice)"
     ],
     "deny": [],
     "ask": []
