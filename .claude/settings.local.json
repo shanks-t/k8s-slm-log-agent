@@ -115,7 +115,8 @@
       "Bash(just dev:*)",
       "Bash(lsof:*)",
       "Bash(kill:*)",
-      "Bash(just stop:*)"
+      "Bash(just stop:*)",
+      "Bash(just:*)"
     ],
     "deny": [],
     "ask": []
