@@ -8,9 +8,8 @@ dev_pids := ".dev-pids"
 default: dev
 
 # Recipe aliases for quick access
-alias stream := test-stream
-alias s := test-stream
-alias a := analyze
+alias s := stream
+alias a := quick-analyze
 alias e := evaluate
 
 # Start local development environment
@@ -172,6 +171,34 @@ loki-query namespace="log-analyzer" severity="all" duration="1h" limit="15":
 [group('local')]
 loki-labels:
     @just-helpers/loki-labels.sh
+
+# Quick streaming analysis of local server (shorthand for testing)
+#
+# Requires: 'just dev' running in another terminal
+# Simple wrapper for rapid testing during development
+#
+# Examples:
+#   just stream                    # llm errors, last 30m (defaults)
+#   just stream llm                # llm errors, last 30m
+#   just stream kube-system error  # kube-system errors, last 30m
+#   just stream llm info 1h        # llm info, last 1 hour
+[group('local')]
+stream namespace="llm" severity="error" lookback="30m":
+    @just-helpers/curl-stream.sh {{namespace}} {{severity}} {{lookback}}
+
+# Quick JSON analysis of local server (shorthand for testing)
+#
+# Requires: 'just dev' running in another terminal
+# Simple wrapper for rapid testing during development
+#
+# Examples:
+#   just quick-analyze                    # llm errors, last 30m (defaults)
+#   just quick-analyze llm                # llm errors, last 30m
+#   just quick-analyze kube-system error  # kube-system errors, last 30m
+#   just quick-analyze llm info 1h        # llm info, last 1 hour
+[group('local')]
+quick-analyze namespace="llm" severity="error" lookback="30m":
+    @just-helpers/curl-analyze.sh {{namespace}} {{severity}} {{lookback}}
 
 # Check LOCAL log-analyzer health
 #
