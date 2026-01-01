@@ -14,10 +14,10 @@
 #   Use case: Comprehensive analysis when you don't know what you're looking for
 #
 # Note: Patterns use case-insensitive matching (?i) to handle variations
-# Patterns match both structured JSON logs (e.g. "level": "ERROR") and plaintext logs
+# For JSON logs, we match 'level.*ERROR' instead of exact JSON syntax to avoid quote escaping issues
 SEVERITY_PATTERNS = {
-    "info": r'(?i)(INFO|DEBUG|TRACE|"level":\s*"(INFO|DEBUG|TRACE)"|successful|started|completed|ready)',
-    "error": r'(?i)(ERROR|FATAL|CRITICAL|WARNING|"level":\s*"(ERROR|FATAL|CRITICAL|WARNING)"|EXCEPTION|failed|failure|panic|crash|killed|terminated)',
+    "info": r'(?i)(INFO|DEBUG|TRACE|level.*\b(INFO|DEBUG|TRACE)\b|successful|started|completed|ready)',
+    "error": r'(?i)(ERROR|FATAL|CRITICAL|WARNING|level.*\b(ERROR|FATAL|CRITICAL|WARNING)\b|EXCEPTION|failed|failure|panic|crash|killed|terminated)',
     "all": None,  # No filter applied
 }
 
