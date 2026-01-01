@@ -355,6 +355,8 @@ deploy:
 #
 # Use case: Release a new version of log-analyzer
 # Example: just release
+#
+# IMPORTANT: Must be run from 'main' branch
 [group('cicd')]
 release: build push deploy
     @echo ""

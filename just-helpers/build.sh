@@ -4,6 +4,22 @@
 
 set -euo pipefail
 
+# Ensure we're on main branch before building release images
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [ "$CURRENT_BRANCH" != "main" ]; then
+    echo "❌ Error: Must be on 'main' branch to build release images"
+    echo "   Current branch: $CURRENT_BRANCH"
+    echo ""
+    echo "To build a release:"
+    echo "  1. git checkout main"
+    echo "  2. git merge $CURRENT_BRANCH"
+    echo "  3. just build"
+    echo ""
+    echo "For local development builds, use Docker directly:"
+    echo "  cd workloads/log-analyzer && docker build ."
+    exit 1
+fi
+
 # Load environment variables
 if [ ! -f .env ]; then
     echo "Error: .env file not found. Copy .env.example and fill in your credentials."
