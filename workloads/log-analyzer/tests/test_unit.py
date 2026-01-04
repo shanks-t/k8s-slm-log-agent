@@ -112,8 +112,8 @@ def test_analyze_with_no_logs_returns_404(test_client_no_logs):
 
     assert response.status_code == 404
     data = response.json()
-    assert "error" in data
-    assert data["error"] == "No logs found"
+    assert "detail" in data
+    assert data["detail"] == "No logs found"
 
 
 @pytest.mark.unit
@@ -373,8 +373,8 @@ def test_analyze_stream_with_no_logs_returns_404(test_client_no_logs):
 
     assert response.status_code == 404
     data = response.json()
-    assert "error" in data
-    assert data["error"] == "No logs found"
+    assert "detail" in data
+    assert data["detail"] == "No logs found"
 
 
 @pytest.mark.unit

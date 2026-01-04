@@ -1,5 +1,6 @@
 """Application configuration using Pydantic Settings."""
 
+from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -34,8 +35,15 @@ class Settings(BaseSettings):
     evaluation_results_dir: str = "/app/results"
 
     # Observability configuration
-    otel_enabled: bool = True
+    otel_enabled: bool = False
     otel_exporter: str = "console"  # Options: "console", "otlp", "jaeger"
+    otel_endpoint: str = "http://localhost:4317"
+    deployment_environment: str = "local"
+
+    # Prompt registry configuration
+    # K8s default: /app/prompt_templates (ConfigMap mount or baked into image)
+    # Local dev: override with LOG_ANALYZER_PROMPTS_DIR=./prompt_templates
+    prompts_dir: Path = Path("/app/prompt_templates")
 
     model_config = SettingsConfigDict(
         env_prefix="LOG_ANALYZER_",

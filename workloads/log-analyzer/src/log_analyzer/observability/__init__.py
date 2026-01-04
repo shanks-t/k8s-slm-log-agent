@@ -1,8 +1,6 @@
 """OpenTelemetry tracing and observability setup."""
 
-import os
 import logging
-
 
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider, ReadableSpan, Span
@@ -20,6 +18,8 @@ from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExport
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from opentelemetry.context import Context
+
+from log_analyzer.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -74,9 +74,7 @@ class FilterSpanProcessor(SpanProcessor):
         return self.next_processor.force_flush(timeout_millis)
 
 
-def setup_telemetry(
-    app, service_name: str = "log-analyzer", service_version: str = "0.1.0"
-):
+def setup_telemetry(app):
     """
     Initialize OpenTelemetry instrumentation for the FastAPI application.
 
@@ -86,23 +84,30 @@ def setup_telemetry(
     - Instruments FastAPI to automatically trace HTTP requests
     - Instruments httpx to trace outgoing HTTP calls (to Loki and LLM)
 
+    All configuration is read from settings (config.py), which can be
+    overridden via environment variables with LOG_ANALYZER_ prefix.
+
     Args:
         app: The FastAPI application instance
-        service_name: Name of the service (appears in Grafana)
-        service_version: Version of the service
     """
+    if not settings.otel_enabled:
+        # Create a no-op tracer provider so get_tracer() still works
+        provider = TracerProvider()
+        trace.set_tracer_provider(provider)
+        logger.info("✓ Telemetry disabled (no-op provider set)")
+        return
+
+    # Telemetry is enabled - set up OTLP exporter and instrumentation
     try:
-        # Get OTLP endpoint from environment variable (defaults to localhost for local dev)
-        otlp_endpoint = os.getenv(
-            "OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317"
-        )
-        environment = os.getenv("DEPLOYMENT_ENVIRONMENT", "local")
+        # Use settings as single source of truth
+        otlp_endpoint = settings.otel_endpoint
+        environment = settings.deployment_environment
 
         # Create resource attributes - these appear as tags in Grafana
         resource = Resource(
             attributes={
-                SERVICE_NAME: service_name,
-                SERVICE_VERSION: service_version,
+                SERVICE_NAME: settings.service_name,
+                SERVICE_VERSION: settings.service_version,
                 DEPLOYMENT_ENVIRONMENT: environment,
                 "service.namespace": "log-analyzer",
             }
@@ -140,7 +145,9 @@ def setup_telemetry(
     except Exception as e:
         logger.error(f"✗ OpenTelemetry initialization failed: {e}")
     else:
-        logger.info(f"✓ OpenTelemetry initialized: {service_name} → {otlp_endpoint}")
+        logger.info(
+            f"✓ OpenTelemetry initialized: {settings.service_name} → {otlp_endpoint}"
+        )
 
 
 def get_tracer(name: str):
