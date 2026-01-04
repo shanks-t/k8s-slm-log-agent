@@ -65,7 +65,7 @@ It also doubles as hands-on preparation for **CKA-level Kubernetes knowledge** a
 
 ## Core Components
 
-### Kubernetes & GitOps
+### Kubernetes & GitOps 
 
 - **Kubernetes** (2-node homelab cluster)
 - **Flux** for GitOps-based reconciliation

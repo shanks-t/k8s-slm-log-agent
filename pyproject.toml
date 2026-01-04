@@ -12,3 +12,8 @@ dependencies = [
 members = [
     "services/log-analyzer",
 ]
+
+[dependency-groups]
+dev = [
+    "ty>=0.0.8",
+]

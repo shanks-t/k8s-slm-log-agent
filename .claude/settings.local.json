@@ -116,7 +116,9 @@
       "Bash(lsof:*)",
       "Bash(kill:*)",
       "Bash(just stop:*)",
-      "Bash(just:*)"
+      "Bash(just:*)",
+      "Bash(uv run:*)",
+      "Bash(LOG_ANALYZER_PROMPTS_DIR=./prompt_templates uv run pytest:*)"
     ],
     "deny": [],
     "ask": []
