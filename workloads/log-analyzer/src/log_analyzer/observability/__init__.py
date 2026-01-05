@@ -90,6 +90,7 @@ def setup_telemetry(app):
     Args:
         app: The FastAPI application instance
     """
+    # Check if telemetry is disabled via config
     if not settings.otel_enabled:
         # Create a no-op tracer provider so get_tracer() still works
         provider = TracerProvider()

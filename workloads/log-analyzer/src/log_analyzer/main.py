@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from log_analyzer.models.requests import AnalyzeRequest
 from log_analyzer.observability import setup_telemetry, get_tracer
 from log_analyzer.observability.logging import setup_logging, get_logger
+from opentelemetry import trace
 from log_analyzer.loki import build_logql_query
 from log_analyzer.pipeline import normalize_log, build_llm_prompt, build_text_header
 from log_analyzer.llm import stream_llm, call_llm
@@ -26,7 +27,13 @@ tracer = get_tracer(__name__)
 
 @asynccontextmanager
 async def check_dependencies(app: FastAPI):
-    # startup phase
+    # In async context managers, code before yield is "setup", code after is "teardown".
+    # The yield keyword turns a function into a generator with lifecycle hooks. 
+    # This pattern ensures resources are properly cleaned up, even if the app crashes - 
+    # Python guarantees the code after yield runs when the context exits
+
+    # === STARTUP PHASE ===
+    # 1. Check external dependencies
     async with httpx.AsyncClient(timeout=2) as client:
         await client.get(f"{settings.loki_url}/ready")
         await client.get(f"{settings.llm_url}/v1/models")
@@ -37,8 +44,23 @@ async def check_dependencies(app: FastAPI):
     except Exception as e:
         # Fail fast: app should not start with broken prompts
         raise RuntimeError(f"Failed to load prompt registry: {e}") from e
-    # hand conrol back to FastAPI
+
+    # 3. Initialize telemetry (only when app actually starts, not during test imports)
+    setup_telemetry(app)
+
+    # === RUN PHASE ===
     yield
+
+    # === SHUTDOWN PHASE ===
+    # Clean up telemetry background threads
+    try:
+        from opentelemetry.sdk.trace import TracerProvider as SDKTracerProvider
+        provider = trace.get_tracer_provider()
+        # Only SDK providers have shutdown(), not the default proxy provider
+        if isinstance(provider, SDKTracerProvider):
+            provider.shutdown()
+    except Exception as e:
+        logger.warning(f"Failed to shutdown telemetry: {e}")
 
 
 app = FastAPI(
@@ -48,8 +70,8 @@ app = FastAPI(
     lifespan=check_dependencies,
 )
 
-# Initialize OpenTelemetry tracing (reads config from settings)
-setup_telemetry(app)
+# OpenTelemetry is now initialized in the lifespan context manager above
+# This ensures it only runs when the app actually starts, not during test imports
 
 
 @app.get("/")
