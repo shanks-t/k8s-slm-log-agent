@@ -4,18 +4,23 @@ from contextlib import asynccontextmanager
 import httpx
 from datetime import datetime, UTC
 
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi.responses import StreamingResponse
 
 from log_analyzer.models.requests import AnalyzeRequest
+from log_analyzer.models.registry import PromptRegistry
 from log_analyzer.observability import setup_telemetry, get_tracer
 from log_analyzer.observability.logging import setup_logging, get_logger
 from opentelemetry import trace
 from log_analyzer.loki import build_logql_query
-from log_analyzer.pipeline import normalize_log, build_llm_prompt, build_text_header
+from log_analyzer.pipeline import normalize_log, build_text_header
 from log_analyzer.llm import stream_llm, call_llm
 from log_analyzer.config import settings
-from log_analyzer.registry import list_prompt_metadata, load_prompt_registry
+from log_analyzer.registry import (
+    list_prompt_metadata,
+    load_prompt_registry,
+    render_prompt,
+)
 
 # Initialize structured logging with trace context
 setup_logging(level="INFO")
@@ -28,8 +33,8 @@ tracer = get_tracer(__name__)
 @asynccontextmanager
 async def check_dependencies(app: FastAPI):
     # In async context managers, code before yield is "setup", code after is "teardown".
-    # The yield keyword turns a function into a generator with lifecycle hooks. 
-    # This pattern ensures resources are properly cleaned up, even if the app crashes - 
+    # The yield keyword turns a function into a generator with lifecycle hooks.
+    # This pattern ensures resources are properly cleaned up, even if the app crashes -
     # Python guarantees the code after yield runs when the context exits
 
     # === STARTUP PHASE ===
@@ -46,6 +51,8 @@ async def check_dependencies(app: FastAPI):
         raise RuntimeError(f"Failed to load prompt registry: {e}") from e
 
     # 3. Initialize telemetry (only when app actually starts, not during test imports)
+    # OpenTelemetry is initialized in the lifespan context manager above
+    # This ensures it only runs when the app actually starts, not during test imports
     setup_telemetry(app)
 
     # === RUN PHASE ===
@@ -55,6 +62,7 @@ async def check_dependencies(app: FastAPI):
     # Clean up telemetry background threads
     try:
         from opentelemetry.sdk.trace import TracerProvider as SDKTracerProvider
+
         provider = trace.get_tracer_provider()
         # Only SDK providers have shutdown(), not the default proxy provider
         if isinstance(provider, SDKTracerProvider):
@@ -70,8 +78,9 @@ app = FastAPI(
     lifespan=check_dependencies,
 )
 
-# OpenTelemetry is now initialized in the lifespan context manager above
-# This ensures it only runs when the app actually starts, not during test imports
+
+def get_prompt_registry(request: Request) -> PromptRegistry:
+    return request.app.state.prompt_registry
 
 
 @app.get("/")
@@ -96,7 +105,7 @@ def list_prompts(request: Request):
 
 
 @app.post("/v1/analyze")
-async def analyze_logs(request: AnalyzeRequest):
+async def analyze_logs(request: AnalyzeRequest, registry=Depends(get_prompt_registry)):
     with tracer.start_as_current_span("analyze_logs") as span:
         # Add request attributes to span for debugging
         span.set_attribute("namespace", request.filters.namespace or "all")
@@ -194,10 +203,16 @@ async def analyze_logs(request: AnalyzeRequest):
             )
 
         # --- Build prompt ---
-        prompt = build_llm_prompt(normalized, request.time_range)
+        inputs = {
+            "logs": normalized,
+            "namespace": request.filters.namespace,
+            "time_range": request.time_range,
+        }
+
+        rendered_prompt = render_prompt(registry, settings.analyze_prompt_id, inputs)
 
         # --- LLM ---
-        analysis = await call_llm(prompt)
+        analysis = await call_llm(rendered_prompt)
 
         logger.info("Log analysis complete")
 
@@ -209,7 +224,9 @@ async def analyze_logs(request: AnalyzeRequest):
 
 
 @app.post("/v1/analyze/stream")
-async def analyze_logs_stream(request: AnalyzeRequest):
+async def analyze_logs_stream(
+    request: AnalyzeRequest, registry=Depends(get_prompt_registry)
+):
     # Pre-flight validation: Query Loki and check for logs BEFORE streaming
     # This allows us to return proper HTTP status codes (404 when no logs found)
     with tracer.start_as_current_span("analyze_logs_stream_preflight") as span:
@@ -285,9 +302,7 @@ async def analyze_logs_stream(request: AnalyzeRequest):
                 for ts_ns, line in result["values"]:
                     logs.append(
                         {
-                            "timestamp": datetime.fromtimestamp(
-                                int(ts_ns) / 1e9, UTC
-                            )
+                            "timestamp": datetime.fromtimestamp(int(ts_ns) / 1e9, UTC)
                             .isoformat()
                             .replace("+00:00", "Z"),
                             "message": line.strip(),
@@ -309,8 +324,16 @@ async def analyze_logs_stream(request: AnalyzeRequest):
             )
 
         # Build prompt and header
-        prompt = build_llm_prompt(normalized, request.time_range)
+        # prompt = build_llm_prompt(normalized, request.time_range)
         header = build_text_header(normalized, request.time_range)
+        # --- Build prompt ---
+        inputs = {
+            "logs": normalized,
+            "namespace": request.filters.namespace,
+            "time_range": request.time_range,
+        }
+
+        rendered_prompt = render_prompt(registry, settings.analyze_prompt_id, inputs)
 
     # Now we know we have logs - create the streaming response
     async def event_stream():
@@ -319,7 +342,7 @@ async def analyze_logs_stream(request: AnalyzeRequest):
             yield header + "\n"
 
             # --- Stream LLM output ---
-            async for chunk in stream_llm(prompt):
+            async for chunk in stream_llm(rendered_prompt):
                 yield chunk
 
             yield "\n\n=== End of Analysis ===\n"

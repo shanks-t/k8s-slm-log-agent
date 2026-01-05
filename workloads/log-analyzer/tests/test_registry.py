@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from log_analyzer.registry import load_prompt_registry, render_prompt
-from log_analyzer.models.prompts import RenderedPrompt
+from log_analyzer.models.registry import RenderedPrompt
 
 # Get path to prompt_templates relative to test file
 PROMPTS_DIR = Path(__file__).parent.parent / "prompt_templates"

@@ -1,8 +1,10 @@
+from log_analyzer.models.registry import RenderedPrompt
+import httpx
+import json
+
 from log_analyzer.observability.logging import setup_logging, get_logger
 from log_analyzer.observability import get_tracer
 from log_analyzer.config import settings
-import httpx
-import json
 
 
 # Initialize structured logging with trace context
@@ -12,17 +14,16 @@ logger = get_logger(__name__)
 # Get tracer for manual span creation
 tracer = get_tracer(__name__)
 
-MODEL_NAME = settings.llm_model
-LLAMA_URL = settings.llm_url
 
-
-async def call_llm(prompt: str):
+# spec = render_prompt()
+async def call_llm(prompt: RenderedPrompt) -> str:
     # Create a span to trace the LLM call
     with tracer.start_as_current_span("call_llm") as llm_span:
         # Add LLM-specific attributes for debugging
-        llm_span.set_attribute("llm.model", MODEL_NAME)
-        llm_span.set_attribute("llm.max_tokens", 150)
-        llm_span.set_attribute("llm.temperature", 0.3)
+        llm_config = prompt.llm_config or {}
+        llm_span.set_attribute("llm.model", settings.llm_model)
+        llm_span.set_attribute("llm.max_tokens", llm_config.get("max_tokens", 150))
+        llm_span.set_attribute("llm.temperature", llm_config.get("temperature", 0.3))
         llm_span.set_attribute("llm.streaming", False)
         llm_span.set_attribute("llm.provider", "llama-cpp")
 
@@ -30,9 +31,9 @@ async def call_llm(prompt: str):
             "Calling LLM for analysis",
             extra={
                 "extra_fields": {
-                    "model": MODEL_NAME,
-                    "max_tokens": 150,
-                    "temperature": 0.3,
+                    "model": settings.llm_model,
+                    "max_tokens": llm_config.get("max_tokens", 150),
+                    "temperature": llm_config.get("temperature", 0.3),
                 }
             },
         )
@@ -43,29 +44,16 @@ async def call_llm(prompt: str):
             pool=5.0,
             read=180.0,
         )
+        # Use pre-rendered messages and config from the prompt template
         payload = {
-            "model": MODEL_NAME,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a Kubernetes reliability engineer. "
-                        "Analyze logs and identify root cause, severity, "
-                        "and recommended actions."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": prompt,
-                },
-            ],
-            "max_tokens": 150,
-            "temperature": 0.3,
+            "model": settings.llm_model,
+            "messages": prompt.messages,
+            **(prompt.llm_config or {}),  # Merge template's LLM config (temp, max_tokens, etc.)
         }
 
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(
-                f"{LLAMA_URL}/v1/chat/completions",
+                f"{settings.llm_url}/v1/chat/completions",
                 json=payload,
             )
             resp.raise_for_status()
@@ -93,14 +81,14 @@ async def call_llm(prompt: str):
         return content
 
 
-async def stream_llm(prompt: str):
-    MAX_TOKENS = 200
+async def stream_llm(prompt: RenderedPrompt):
     # Create a span to trace the LLM streaming call
     with tracer.start_as_current_span("call_llm") as llm_span:
         # Add LLM-specific attributes for debugging
-        llm_span.set_attribute("llm.model", MODEL_NAME)
-        llm_span.set_attribute("llm.max_tokens", 200)
-        llm_span.set_attribute("llm.temperature", 0.3)
+        llm_config = prompt.llm_config or {}
+        llm_span.set_attribute("llm.model", settings.llm_model)
+        llm_span.set_attribute("llm.max_tokens", llm_config.get("max_tokens", 200))
+        llm_span.set_attribute("llm.temperature", llm_config.get("temperature", 0.3))
         llm_span.set_attribute("llm.streaming", True)
         llm_span.set_attribute("llm.provider", "llama-cpp")
 
@@ -108,9 +96,9 @@ async def stream_llm(prompt: str):
             "Calling LLM for analysis",
             extra={
                 "extra_fields": {
-                    "model": MODEL_NAME,
-                    "max_tokens": 200,
-                    "temperature": 0.3,
+                    "model": settings.llm_model,
+                    "max_tokens": llm_config.get("max_tokens", 200),
+                    "temperature": llm_config.get("temperature", 0.3),
                 }
             },
         )
@@ -125,27 +113,17 @@ async def stream_llm(prompt: str):
         tokens_generated = 0
 
         async with httpx.AsyncClient(timeout=timeout) as client:
+            # Use pre-rendered messages and config from the prompt template
+            payload = {
+                "model": settings.llm_model,
+                "stream": True,
+                "messages": prompt.messages,
+                **(prompt.llm_config or {}),  # Merge template's LLM config
+            }
             async with client.stream(
                 "POST",
-                f"{LLAMA_URL}/v1/chat/completions",
-                json={
-                    "model": MODEL_NAME,
-                    "stream": True,
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": (
-                                "You are a Kubernetes reliability engineer.\n"
-                                "Analyze logs and identify whether action is required.\n"
-                                "If logs are informational, clearly say so.\n"
-                                "Write plain text, not Markdown."
-                            ),
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
-                    "max_tokens": 200,
-                    "temperature": 0.3,
-                },
+                f"{settings.llm_url}/v1/chat/completions",
+                json=payload,
             ) as resp:
                 async for line in resp.aiter_lines():
                     if not line.startswith("data:"):

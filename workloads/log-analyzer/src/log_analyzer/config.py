@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     # K8s default: /app/prompt_templates (ConfigMap mount or baked into image)
     # Local dev: override with LOG_ANALYZER_PROMPTS_DIR=./prompt_templates
     prompts_dir: Path = Path("/app/prompt_templates")
+    analyze_prompt_id: str = "k8s_log_analysis_v1"
 
     model_config = SettingsConfigDict(
         env_prefix="LOG_ANALYZER_",

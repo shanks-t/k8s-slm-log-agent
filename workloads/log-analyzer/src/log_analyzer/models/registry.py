@@ -5,6 +5,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+PromptRegistry = dict[str, "PromptTemplate"]
+
 
 class PromptMetadata(BaseModel):
     """Metadata for a prompt."""
@@ -33,7 +35,7 @@ class PromptTemplate(BaseModel):
     required_inputs: list[str] = Field(
         ..., description="List of inputs in the template"
     )
-    optional_inputs: dict[str, str] = Field(
+    optional_inputs: dict[str, Any] = Field(
         ..., description="dictionary of optional inputs in the template"
     )
     # model configuration

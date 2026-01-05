@@ -6,13 +6,13 @@ from typing import Any
 
 import yaml
 from jinja2 import Environment, StrictUndefined
+from pydantic import BaseModel
 
-from log_analyzer.models.prompts import (
+from log_analyzer.models.registry import (
     PromptTemplate,
     PromptMetadata,
     RenderedPrompt,
 )
-from log_analyzer.config import settings
 from log_analyzer.observability.logging import get_logger
 
 logger = get_logger(__name__)
@@ -32,6 +32,20 @@ def sha256_json(data: Any) -> str:
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
+def normalize_for_json(value):
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, BaseModel):
+        # model_dump() returns a dict that may still contain non-JSON-serializable types
+        # (e.g., datetime objects). Recursively normalize the dumped dict to handle these.
+        return normalize_for_json(value.model_dump())
+    if isinstance(value, dict):
+        return {k: normalize_for_json(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [normalize_for_json(v) for v in value]
+    return value
+
+
 def load_prompt_file(path: Path) -> PromptTemplate:
     """Load and validate a single prompt template file."""
     raw = yaml.safe_load(path.read_text())
@@ -49,9 +63,7 @@ def load_prompt_file(path: Path) -> PromptTemplate:
         )
         raise ValueError(f"ID mismatch in {path.name}")
 
-    combined = raw["system"] + raw["user"]
-
-    template_hash = sha256_text(combined)
+    template_hash = sha256_json({"system": raw["system"], "user": raw["user"]})
 
     llm_config = raw["model_defaults"]
 
@@ -106,7 +118,7 @@ def load_prompt_registry(prompts_dir: Path) -> dict[str, PromptTemplate]:
 
 
 def render_prompt(
-    registry: dict[str, PromptTemplate], prompt_id: str, variables: dict[str, str]
+    registry: dict[str, PromptTemplate], prompt_id: str, variables: dict[str, Any]
 ) -> RenderedPrompt:
     """Render a prompt template with given variables and compute hashes."""
     logger.debug(
@@ -175,7 +187,8 @@ def render_prompt(
         {"role": "user", "content": rendered_user},
     ]
 
-    variables_hash = sha256_json(merged_vars)
+    normalized_vars = normalize_for_json(merged_vars)
+    variables_hash = sha256_json(normalized_vars)
     rendered_hash = sha256_json(messages)
 
     logger.info(
@@ -203,7 +216,7 @@ def render_prompt(
 def list_prompt_metadata(
     registry: dict[str, PromptTemplate],
 ) -> list[PromptMetadata]:
-    now = datetime.utcnow()
+    now = datetime.now()
 
     return [
         PromptMetadata(

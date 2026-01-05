@@ -12,7 +12,7 @@ inputs:
   optional:
     namespace: unknown
     component: unknown
-    time_window: unknown
+    time_range: unknown
 
 system: |
   You are a senior Kubernetes Site Reliability Engineer.
@@ -29,7 +29,7 @@ system: |
 
   Output format (plain text, in this order):
   Root cause:
-  Severity:
+Severity:
   Action required:
   Recommended steps:
 
@@ -37,7 +37,7 @@ user: |
   Context:
   - Namespace: {{ namespace }}
   - Component: {{ component }}
-  - Time window: {{ time_window }}
+  - Time window: {{ time_range }}
 
   Logs:
   ---
