@@ -1,0 +1,133 @@
+flowchart TB
+%% =====================
+%% GitOps Layer
+%% =====================
+subgraph GIT["GitHub"]
+  GH["k8s-slm-log-agent<br/>main branch"]
+end
+
+subgraph FLUX["Flux CD (GitOps)"]
+  GR["GitRepository<br/>Controller"]
+  KUST["Kustomizations<br/>infrastructure + workloads"]
+  HELM["Helm Controller<br/>(7 HelmReleases)"]
+
+  GR --> KUST --> HELM
+end
+
+GH -->|Git Sync| GR
+
+%% =====================
+%% Kubernetes Cluster
+%% =====================
+subgraph CLUSTER["Kubernetes v1.35.0<br/>2-Node Cluster<br/>Flannel CNI (VXLAN)"]
+
+  %% Nodes
+  subgraph NODE1["Node 1 – Control Plane<br/>10.0.0.102<br/>hardware=light"]
+  end
+
+  subgraph NODE2["Node 2 – Worker<br/>10.0.0.103<br/>hardware=heavy<br/>taint: heavy=true"]
+  end
+end
+
+HELM -->|Deploys & Reconciles| CLUSTER
+
+%% =====================
+%% Ingress Layer
+%% =====================
+subgraph INGRESS["Ingress & Routing"]
+  subgraph ENVOY["Envoy Gateway"]
+    GW["Gateway<br/>:80"]
+    ROUTES["HTTPRoutes<br/>/grafana<br/>/test"]
+    BACKENDS["Backend Services<br/>grafana:80<br/>test-service:8080"]
+
+    GW --> ROUTES --> BACKENDS
+  end
+end
+
+CLUSTER --> INGRESS
+
+%% =====================
+%% Observability Stack
+%% =====================
+subgraph LOGGING["Observability Stack<br/>(logging namespace)"]
+
+  GRAF["Grafana<br/>(Node 1)"]
+  LOKI["Loki<br/>(Node 2)<br/>:3100"]
+  TEMPO["Tempo<br/>(Node 2)"]
+
+  GRAF <--> LOKI
+  LOKI <--> TEMPO
+
+  %% Alloy Agents
+  subgraph ALLOY["Grafana Alloy Agents"]
+    A1["Alloy<br/>Logs (Node 1)"]
+    A2["Alloy<br/>Logs (Node 2)"]
+    A3["Alloy<br/>Traces (Node 1)"]
+    A4["Alloy<br/>Traces (Node 2)"]
+  end
+
+  A1 --> LOKI
+  A2 --> LOKI
+  A3 --> TEMPO
+  A4 --> TEMPO
+end
+
+INGRESS --> LOGGING
+
+%% =====================
+%% Monitoring Stack
+%% =====================
+subgraph MON["Monitoring Stack<br/>(monitoring namespace)"]
+
+  PROM["Prometheus<br/>(Node 2)"]
+  KSM["kube-state-metrics<br/>(Node 2)"]
+  MS["Metrics Server<br/>(Node 1)"]
+
+  PROM --> KSM
+  PROM --> MS
+
+  NE1["Node Exporter<br/>(Node 1)"]
+  NE2["Node Exporter<br/>(Node 2)"]
+  PUSH["Pushgateway<br/>(Node 2)"]
+
+  NE1 --> PROM
+  NE2 --> PROM
+  PUSH --> PROM
+end
+
+CLUSTER --> MON
+
+%% =====================
+%% AI / ML Intelligence Stack
+%% =====================
+subgraph AI["AI / ML Intelligence Stack"]
+
+  subgraph ANALYZER["Log Analyzer Service<br/>(Node 1)<br/>log-analyzer namespace"]
+    FASTAPI["FastAPI App<br/>:8000<br/><br/>1. Query Loki (LogQL)<br/>2. Build Prompt<br/>3. Send to LLM<br/>4. Return Insights"]
+  end
+
+  subgraph LLM["Llama.cpp<br/>(Node 2)<br/>llm namespace"]
+    MODEL["Llama 3.2 3B<br/>GGUF Q4_K_M<br/>OpenAI-compatible API<br/>:8080"]
+  end
+
+  FASTAPI -->|LogQL Queries| LOKI
+  FASTAPI -->|Inference| MODEL
+end
+
+LOGGING --> AI
+
+%% =====================
+%% Storage
+%% =====================
+subgraph STORAGE["Storage Architecture<br/>Node 2 – /mnt/k8s-storage<br/>Samsung NVMe 477GB"]
+
+  PV1["loki-pv<br/>200GB"]
+  PV2["tempo-pv<br/>50GB"]
+  PV3["llama-models-pv<br/>20GB"]
+
+  PV1 --> LOKI
+  PV2 --> TEMPO
+  PV3 --> MODEL
+end
+
+NODE2 --> STORAGE
