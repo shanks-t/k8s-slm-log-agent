@@ -138,7 +138,7 @@ def setup_telemetry(app):
         # Exclude http.send spans to reduce noise from streaming responses
         FastAPIInstrumentor.instrument_app(
             app,
-            excluded_urls="/heath",  # exclude specific paths if needed
+            excluded_urls="/health",  # exclude specific paths if needed
         )
 
         # Auto-instrument httpx - traces calls to Loki and LLM
