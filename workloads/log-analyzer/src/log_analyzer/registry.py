@@ -14,8 +14,10 @@ from log_analyzer.models.registry import (
     RenderedPrompt,
 )
 from log_analyzer.observability.logging import get_logger
+from log_analyzer.observability import get_tracer
 
 logger = get_logger(__name__)
+tracer = get_tracer(__name__)
 
 
 def sha256_text(content: str) -> str:
@@ -121,96 +123,111 @@ def render_prompt(
     registry: dict[str, PromptTemplate], prompt_id: str, variables: dict[str, Any]
 ) -> RenderedPrompt:
     """Render a prompt template with given variables and compute hashes."""
-    logger.debug(
-        "Rendering prompt",
-        extra={
-            "extra_fields": {
-                "prompt_id": prompt_id,
-                "variable_count": len(variables),
-            }
-        },
-    )
+    with tracer.start_as_current_span("render_prompt") as span:
+        span.set_attribute("prompt.id", prompt_id)
+        span.set_attribute("prompt.variable_count", len(variables))
 
-    if prompt_id not in registry:
-        logger.error(
-            "Prompt not found in registry",
+        logger.debug(
+            "Rendering prompt",
             extra={
                 "extra_fields": {
                     "prompt_id": prompt_id,
-                    "available_prompts": list(registry.keys()),
+                    "variable_count": len(variables),
                 }
             },
         )
-        raise KeyError(f"Prompt '{prompt_id}' not found in registry")
 
-    template = registry[prompt_id]
+        if prompt_id not in registry:
+            logger.error(
+                "Prompt not found in registry",
+                extra={
+                    "extra_fields": {
+                        "prompt_id": prompt_id,
+                        "available_prompts": list(registry.keys()),
+                    }
+                },
+            )
+            raise KeyError(f"Prompt '{prompt_id}' not found in registry")
 
-    # template.required_inptues is a list of variable nanmes that must be provided
-    # variables.keys is the set of user-provided var names
-    # the set difference finds inputs that were not passed
-    # sets are fast, avoids loops, order does not matter
-    missing = set(template.required_inputs) - variables.keys()
-    if missing:
-        logger.error(
-            "Missing required prompt inputs",
+        template = registry[prompt_id]
+
+        # template.required_inptues is a list of variable nanmes that must be provided
+        # variables.keys is the set of user-provided var names
+        # the set difference finds inputs that were not passed
+        # sets are fast, avoids loops, order does not matter
+        missing = set(template.required_inputs) - variables.keys()
+        if missing:
+            logger.error(
+                "Missing required prompt inputs",
+                extra={
+                    "extra_fields": {
+                        "prompt_id": prompt_id,
+                        "missing_inputs": list(missing),
+                        "required_inputs": template.required_inputs,
+                        "provided_inputs": list(variables.keys()),
+                    }
+                },
+            )
+            raise ValueError(f"Missing required inputs: {missing}")
+
+        # when two dicts are merged this way python hands duplicate keys by overriding
+        # the values from first dict with vals from second dict
+        merged_vars = {**template.optional_inputs, **variables}
+
+        # Render Jinja templates (potentially slow for complex templates)
+        with tracer.start_as_current_span("render_jinja_templates") as jinja_span:
+            # jinja raises error if template contains items not in merged_vars
+            # by default jijna uses less strict Undefined class which allows ops on undefined values (e.g. printing as empty string)
+            # and results in silent failures
+            # Strict raises exception immediately if any part of template is missing
+            jinja_env = Environment(undefined=StrictUndefined)
+
+            # render each template separately to keep system distinct from user instructions
+            # keeps aligned with OpenAI style completions
+            rendered_system = jinja_env.from_string(template.system_template).render(
+                merged_vars
+            )
+            rendered_user = jinja_env.from_string(template.user_template).render(merged_vars)
+
+            # construct chat messages array
+            messages = [
+                {"role": "system", "content": rendered_system},
+                {"role": "user", "content": rendered_user},
+            ]
+
+            jinja_span.set_attribute("prompt.system_length", len(rendered_system))
+            jinja_span.set_attribute("prompt.user_length", len(rendered_user))
+
+        # Compute cryptographic hashes (potentially slow for large messages)
+        with tracer.start_as_current_span("compute_hashes"):
+            normalized_vars = normalize_for_json(merged_vars)
+            variables_hash = sha256_json(normalized_vars)
+            rendered_hash = sha256_json(messages)
+
+        span.set_attribute("prompt.template_hash", template.template_hash[:8])
+        span.set_attribute("prompt.variables_hash", variables_hash[:8])
+        span.set_attribute("prompt.rendered_hash", rendered_hash[:8])
+
+        logger.info(
+            "Prompt rendered successfully",
             extra={
                 "extra_fields": {
                     "prompt_id": prompt_id,
-                    "missing_inputs": list(missing),
-                    "required_inputs": template.required_inputs,
-                    "provided_inputs": list(variables.keys()),
+                    "template_hash": template.template_hash[:8],
+                    "variables_hash": variables_hash[:8],
+                    "rendered_hash": rendered_hash[:8],
                 }
             },
         )
-        raise ValueError(f"Missing required inputs: {missing}")
 
-    # when two dicts are merged this way python hands duplicate keys by overriding
-    # the values from first dict with vals from second dict
-    merged_vars = {**template.optional_inputs, **variables}
-
-    # jinja raises error if template contains items not in merged_vars
-    # by default jijna uses less strict Undefined class which allows ops on undefined values (e.g. printing as empty string)
-    # and results in silent failures
-    # Strict raises exception immediately if any part of template is missing
-    jinja_env = Environment(undefined=StrictUndefined)
-
-    # render each template separately to keep system distinct from user instructions
-    # keeps aligned with OpenAI style completions
-    rendered_system = jinja_env.from_string(template.system_template).render(
-        merged_vars
-    )
-    rendered_user = jinja_env.from_string(template.user_template).render(merged_vars)
-
-    # construct chat messages array
-    messages = [
-        {"role": "system", "content": rendered_system},
-        {"role": "user", "content": rendered_user},
-    ]
-
-    normalized_vars = normalize_for_json(merged_vars)
-    variables_hash = sha256_json(normalized_vars)
-    rendered_hash = sha256_json(messages)
-
-    logger.info(
-        "Prompt rendered successfully",
-        extra={
-            "extra_fields": {
-                "prompt_id": prompt_id,
-                "template_hash": template.template_hash[:8],
-                "variables_hash": variables_hash[:8],
-                "rendered_hash": rendered_hash[:8],
-            }
-        },
-    )
-
-    return RenderedPrompt(
-        id=template.id,
-        template_hash=template.template_hash,
-        rendered_hash=rendered_hash,
-        variables_hash=variables_hash,
-        messages=messages,
-        llm_config=template.llm_config,
-    )
+        return RenderedPrompt(
+            id=template.id,
+            template_hash=template.template_hash,
+            rendered_hash=rendered_hash,
+            variables_hash=variables_hash,
+            messages=messages,
+            llm_config=template.llm_config,
+        )
 
 
 def list_prompt_metadata(

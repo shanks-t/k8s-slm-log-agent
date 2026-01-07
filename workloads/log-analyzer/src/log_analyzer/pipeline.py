@@ -9,24 +9,6 @@ def normalize_log(entry):
     }
 
 
-# def build_llm_prompt(normalized_logs, time_range):
-#     header = (
-#         f"Cluster: homelab\n"
-#         f"Time window: {time_range.start.isoformat()} → {time_range.end.isoformat()}\n\n"
-#         "Logs:\n"
-#     )
-
-#     lines = []
-#     for log in normalized_logs:
-#         lines.append(
-#             f"[{log['time']}] {log['source']} "
-#             f"(pod={log.get('pod')}, node={log.get('node')})\n"
-#             f"{log['message']}"
-#         )
-
-#     return header + "\n\n".join(lines)
-
-
 def build_text_header(normalized_logs, time_range):
     lines = [
         "=== Log Analyzer ===",
