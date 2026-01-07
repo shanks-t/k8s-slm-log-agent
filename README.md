@@ -1,208 +1,239 @@
-# Homelab LLM Observability & Evaluation Platform
+# K8s Homelab LLM Observability & Evaluation Platform
 
-A **production-inspired Kubernetes homelab platform** for serving and evaluating **LLM-powered log analysis workflows**, with first-class observability, reproducible experiments, and rigorous offline evaluation.
+Production-grade LLM observability platform built from scratch on self-hosted Kubernetes.
 
-This project is a **research testbed** for modern **MLOps, platform engineering, and LLM observability**, built entirely with **open-source tools** and designed to mirror real production trade-offs under constrained resources.
+### Live System
+![Prometheus metrics showing pod resource usage and request latency](docs/images/k8s_metrics.png)
+*Prometheus metrics: LLM inference pod CPU/memory and request rate*
+
+![Loki query results showing structured K8s logs](docs/images/loki.png)
+*Loki: Real-time log aggregation from all cluster pods*
+
+![OpenTelemetry distributed trace spanning FastAPI → Loki → Llama.cpp](docs/images/otel.png)
+*Tempo trace: Full request breakdown - prompt rendering (4ms), Loki query (61ms), **CPU-only LLM inference (22.2s)**.
+The high inference latency is the tradeoff for $0/month hosting on my own hardware vs cloud GPU costs.*
+
+## Why I Built This
+I built this to understand LLM systems from first principles rather than relying on abstractions.
+Gen-AI is just another tech stack - what are the core primitives, tradeoffs, and failure modes?
+
+**My approach:** Run models on my own hardware, measure actual latency (not benchmarks),
+define my own observability primitives, and iterate on prompts with content-based versioning.
+
+**This enables:**
+- Measuring behavior across different models, configs, and prompts
+- A/B testing design choices with real metrics
+- Understanding latency through distributed tracing
+- Pushing limits of CPU inference with SLMs
+
+This is my deliberate practice environment for LLM systems engineering, were I can workout my ideas, make mistakes and crystallize fundamental understandings about LM-based systems.
+
+**Skills demonstrated:** MLOps • Platform Engineering • LLM Observability • API Design •
+  Kubernetes • End-to-End Systems Thinking
+
+**Development Journal:** I maintain a [daily TIL (Today I Learned)](./TIL.md)) documenting technical decisions,
+  debugging notes, and lessons learned. It provides transparency into my development process and
+  design tradeoffs.
+---
+
+## ASCII Architecture (produced by Claude)
+```
+                              ┌─────────────────────────────────┐
+                              │       GitHub Repository         │
+                              │   k8s-slm-log-agent (main)      │
+                              └──────────────┬──────────────────┘
+                                             │ Git Sync
+                                             ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│                              Flux CD GitOps                                │
+│  ┌──────────────┐  ┌───────────────┐  ┌──────────────────────────────┐     │
+│  │ GitRepository│  │ Kustomizations │  │   Helm Controller           │     │
+│  │  Controller  │─▶│ infrastructure │─▶│   (7 HelmReleases)          │     │
+│  └──────────────┘  │   workloads    │  └──────────────────────────────┘    │
+│                    └───────────────┘                                       │
+└────────────────────────────────────────────────────────────────────────────┘
+                                             │
+                                             │ Deploys & Reconciles
+                                             ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│                   Kubernetes v1.35.0 (2-Node Cluster)                      │
+│                          Flannel CNI (VXLAN)                               │
+└────────────────────────────────────────────────────────────────────────────┘
+                                             │
+        ┌────────────────────────────────────┴─────────────────────────────┐
+        │                                                                  │
+        ▼                                                                  ▼
+┌─────────────────────────────────┐                    ┌─────────────────────────────────┐
+│       Node 1 (Control Plane)    │                    │       Node 2 (Worker)           │
+│     10.0.0.102 - hardware=light │                    │   10.0.0.103 - hardware=heavy   │
+│                                 │                    │       Taint: heavy=true         │
+└─────────────────────────────────┘                    └─────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│                            Ingress & Routing Layer                               │
+│  ┌────────────────────────────────────────────────────────────────────────┐      │
+│  │                         Envoy Gateway (Node 1/2)                       │      │
+│  │  ┌───────────┐    ┌────────────────┐    ┌──────────────────────┐       │      │
+│  │  │  Gateway  │───▶│   HTTPRoutes   │───▶│  Backend Services    │       │      │
+│  │  │   (eg)    │    │ - /grafana     │    │ - grafana:80         │       │      │
+│  │  │ Port 80   │    │ - /test        │    │ - test-service:8080  │       │      │
+│  │  └───────────┘    └────────────────┘    └──────────────────────┘       │      │
+│  └────────────────────────────────────────────────────────────────────────┘      │
+└──────────────────────────────────────────────────────────────────────────────────┘
+                                        │
+                     ┌──────────────────┼──────────────────┐
+                     │                  │                  │
+                     ▼                  ▼                  ▼
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                          Observability Stack (logging ns)                      │
+│                                                                                │
+│  ┌──────────────┐      ┌──────────────┐      ┌──────────────┐                  │
+│  │   Grafana    │◀────▶│     Loki     │◀────▶│    Tempo     │                  │
+│  │  (Node 1)    │      │  (Node 2)    │      │  (Node 2)    │                  │
+│  │ Dashboards & │      │ Log Storage  │      │   Traces     │                  │
+│  │     UI       │      │   3100/tcp   │      │              │                  │
+│  └──────────────┘      └──────────────┘      └──────────────┘                  │
+│         ▲                      ▲                     ▲                         │
+│         │                      │                     │                         │
+│         │              ┌───────┴──────┐              │                         │
+│         │              │              │              │                         │
+│  ┌──────┴──────┐  ┌───┴────┐   ┌────┴────┐   ┌─────┴──────┐                    │
+│  │   Alloy     │  │ Alloy  │   │ Alloy   │   │   Alloy    │                    │
+│  │  (Node 1)   │  │(Node 2)│   │(Node 1) │   │  (Node 2)  │                    │
+│  │ Log Collect │  │Logs    │   │ Traces  │   │  Traces    │                    │
+│  └─────────────┘  └────────┘   └─────────┘   └────────────┘                    │
+│        ▲              ▲              ▲              ▲                          │
+│        └──────────────┴──────────────┴──────────────┘                          │
+│                   Scrapes all pod logs & traces                                │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                    Monitoring Stack (monitoring ns)                            │
+│                                                                                │
+│  ┌──────────────────┐      ┌─────────────────┐      ┌──────────────────┐       │
+│  │   Prometheus     │◀────▶│  Kube State     │      │  Metrics Server  │       │
+│  │    (Node 2)      │      │    Metrics      │      │    (Node 1)      │       │
+│  │ Metrics Storage  │      │   (Node 2)      │      │  Resource API    │       │
+│  │    :80/tcp       │      │  K8s Objects    │      │                  │       │
+│  └────────┬─────────┘      └─────────────────┘      └──────────────────┘       │
+│           │                                                                    │
+│           │ Scrapes                                                            │
+│           │                                                                    │
+│  ┌────────┴────────────────────────────────────────────┐                       │
+│  │                                                      │                      │
+│  ▼                          ▼                           ▼                      │
+│  ┌──────────────┐    ┌──────────────┐         ┌──────────────┐                 │
+│  │ Node Exporter│    │Node Exporter │         │  Pushgateway │                 │
+│  │  (Node 1)    │    │  (Node 2)    │         │   (Node 2)   │                 │
+│  │ Host Metrics │    │ Host Metrics │         │ Batch Metrics│                 │
+│  └──────────────┘    └──────────────┘         └──────────────┘                 │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                          AI/ML Intelligence Stack                              │
+│                                                                                │
+│  ┌───────────────────────────────────────────────────────────────────────┐     │
+│  │                       Log Analyzer Service (Node 1)                   │     │
+│  │                         log-analyzer namespace                        │     │
+│  │  ┌──────────────────────────────────────────────────────────────┐     │     │
+│  │  │              FastAPI Application (:8000)                     │     │     │
+│  │  │                                                              │     │     │
+│  │  │  1. Collects logs from Loki (LogQL queries)                  │     │     │
+│  │  │  2. Builds prompts via Prompt Registry                       │     │     │
+│  │  │  3. Sends to Llama.cpp for analysis                          │     │     │
+│  │  │  4. Returns structured insights                              │     │     │
+│  │  └──────────────────────────────────────────────────────────────┘     │     │
+│  └────────────────┬───────────────────────────┬───────────────────────────┘    │
+│                   │                           │                                │
+│                   │ Queries                   │ Inference                      │
+│                   ▼                           ▼                                │
+│       ┌──────────────────┐        ┌──────────────────────┐                     │
+│       │       Loki       │        │     Llama.cpp        │                     │
+│       │    (Node 2)      │        │     (Node 2)         │                     │
+│       │  logging:3100    │        │   llm namespace      │                     │
+│       └──────────────────┘        │                      │                     │
+│                                   │  Llama 3.2 3B Model  │                     │
+│                                   │    (GGUF Q4_K_M)     │                     │
+│                                   │   OpenAI-compatible  │                     │
+│                                   │      API :8080       │                     │
+│                                   └──────────────────────┘                     │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           Storage Architecture                                  │
+│                                                                                 │
+│                            Node 2: /mnt/k8s-storage                             │
+│                          (Samsung NVMe 477GB SSD)                               │
+│                                                                                 │
+│  ┌────────────────┐    ┌────────────────┐    ┌────────────────────┐             │
+│  │   loki-pv      │    │   tempo-pv     │    │ llama-models-pv    │             │
+│  │   200GB        │    │    50GB        │    │      20GB          │             │
+│  │ Local Storage  │    │ Local Storage  │    │  Local Storage     │             │
+│  └────────────────┘    └────────────────┘    └────────────────────┘             │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                         Key Architectural Patterns                             │
+│                                                                                │
+│  • GitOps: Flux CD reconciles from main branch (infrastructure + workloads)    │
+│  • Workload Placement: Node labels (hardware=light/heavy) + taints             │
+│  • Observability: Unified Alloy collectors → Loki (logs) + Tempo (traces)      │
+│  • Metrics: Prometheus scrapes node-exporter, kube-state-metrics, services     │
+│  • AI Pipeline: FastAPI → Loki → Prompt Registry → Llama.cpp                   │
+│  • Ingress: Envoy Gateway with Gateway API (HTTPRoute resources)               │
+│  • Storage: Static PVs on Node 2 NVMe for stateful workloads                   │
+└────────────────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## Why This Project Exists
+## Core Tools
+- [K8s](https://kubernetes.io/docs/home/)
+- [Flux](https://fluxcd.io/flux/concepts/)
+- [llama.cpp](https://github.com/ggml-org/llama.cpp)
+- [OTel](https://opentelemetry.io/docs/specs/otel/)
+- [Loki](https://github.com/grafana/loki)
+- [Prometheus](https://prometheus.io/docs/introduction/overview/)
+- [Grafana](https://grafana.com/docs/grafana/latest/)
+- [Alloy](https://grafana.com/docs/alloy/latest/)
+- [Tempo](https://grafana.com/docs/tempo/latest/)
+- [FastAPI](https://fastapi.tiangolo.com/advanced/)
+- [Just](https://just.systems/man/en/)
+- [uv](https://docs.astral.sh/uv/getting-started/installation/)
+- [ty](https://docs.astral.sh/ty/)
+- [Ruff](https://docs.astral.sh/ruff/)
+- [Docker](https://docs.docker.com/)
+- [Claude](https://code.claude.com/docs/en/overview)
 
-Most LLM demos stop at *“it works.”*  
-Production systems need answers to harder questions:
+### Kubernetes & GitOps
 
-- Which prompt produced this output?
-- Did a model change silently degrade quality?
-- Can I reproduce this result two weeks from now? 
-- How do I observe LLM behavior using the same primitives as the rest of my stack?
+- 2-node Kubernetes homelab
+- **Flux** for GitOps reconciliation
+- Explicit placement strategy:
+  - Node 1: control plane + UX
+  - Node 2: LLM inference, Loki, evaluation jobs
 
-This project explores those questions by:
-
-- Treating **prompts, datasets, and configs as versioned artifacts**
-- Running **offline, reproducible evaluations** on real cluster logs
-- Using **OpenTelemetry** as the backbone for LLM observability
-- Integrating **LLM inference directly into a Kubernetes control-plane context**
-
-It also doubles as hands-on preparation for **CKA-level Kubernetes knowledge** and a practical exploration of state of the art infrastructure management 
-
----
-
-## What This Demonstrates (for Employers)
-
-- **End-to-end MLOps thinking**: ingestion → inference → evaluation → observability  
-- **Strong platform instincts**: separation of control-plane vs workload nodes, storage isolation, GitOps  
-- **Evaluation rigor**: golden datasets, A/B testing, ROUGE + human review  
-- **Observability maturity**: trace–log–metric correlation for LLM workloads  
-- **Judgment under constraints**: small models (llama.cpp), CPU-only inference, homelab realism  
-
----
-
-## System Architecture (High Level)
-
-### Request Flow
-
-1. **FastAPI Log Analyzer**
-   - Queries Loki for structured logs  
-   - Routes requests to the appropriate prompt + model configuration  
-
-2. **llama.cpp Inference Server**
-   - Runs small LLMs locally (1B–7B)  
-
-3. **OpenTelemetry Instrumentation**
-   - Traces prompt selection, rendering, and inference  
-
-4. **Observability Stack**
-   - Logs → Loki  
-   - Traces → Tempo  
-   - Metrics → Prometheus  
-   - Visualization → Grafana  
-
-5. **Offline Evaluation Harness**
-   - Runs experiments against a frozen golden dataset  
-   - Publishes results back into Grafana dashboards  
-
----
-
-## Core Components
-
-### Kubernetes & GitOps 
-
-- **Kubernetes** (2-node homelab cluster)
-- **Flux** for GitOps-based reconciliation
-- Explicit **workload placement strategy**:
-  - Control plane + UX on **Node 1**
-  - LLM inference, Loki, and evaluation jobs on **Node 2**
 
 ### LLM Serving
 
-- **llama.cpp** behind an HTTP API
-- Multiple quantizations tested (Q4, Q8)
-- Model choice driven by **accuracy vs latency trade-offs**, not vibes
+- `llama.cpp` behind an HTTP API
+- Model selection driven by **latency vs accuracy**, not vibes
+- Quantization is a first-class tuning parameter
 
 ### Observability (OTel-First)
 
-- **OpenTelemetry** for tracing LLM requests
-- **Tempo** for trace storage
-- **Loki** for structured logs
-- **Prometheus** for metrics
-- **Grafana** as the unified UI
-
-> No LLM-specific SaaS required — everything flows through standard telemetry primitives.
+Everything flows through **OpenTelemetry**:
+- Traces → Tempo
+- Logs → Loki
+- Metrics → Prometheus
+- One UI: Grafana
 
 ---
 
-## LLM Evaluation Framework (Key Differentiator)
+## Evaluation Framework (In Progress)
 
-### Golden Dataset
+✅ **Completed:** Golden dataset of 500+ labeled log examples from real cluster failures
+⏳ **Current Work:** Designing eval metrics (precision/recall on root cause detection)
+📅 **Next:** Automated eval pipeline with Prometheus metrics export
 
-- **100% real logs** from my own cluster
-- Manually reviewed and labeled
-- Covers:
-  - `kube-system`
-  - Logging stack
-  - LLM inference failures
-  - GitOps reconciliation issues
-- Frozen and versioned (`golden-v1`, `golden-v2`, …)
-
-Think of this as **unit tests for LLM behavior**.
-
-### Evaluation Methodology
-
-Each experiment is fully reproducible and defined by:
-
-- Dataset version
-- Model + quantization
-- Prompt template + version
-- Sampling parameters (temperature, max tokens)
-
-**Metrics include:**
-
-- Root cause exact match
-- Severity classification accuracy
-- Component detection (F1)
-- ROUGE for summary quality
-- Latency (avg / p95)
-- Token usage
-
-**Results are:**
-
-- Saved per-run with frozen configs
-- Compared via A/B testing
-- Visualized directly in Grafana
-
----
-
-## Prompt Engineering as a First-Class Artifact
-
-Prompts are treated like **code**:
-
-- Versioned
-- Hashed
-- Reviewed in Git
-- Attributed in OpenTelemetry traces
-
-Each request can be traced back to:
-
-- Prompt ID
-- Prompt version
-- Rendered prompt hash
-- Model configuration
-
-This allows answering:
-
-> *“Which prompt caused this output?”*  
-
-…without storing raw prompt text in telemetry.
-
----
-
-## Development & Experimentation Workflow
-
-- Local development via **`just`**
-- **Git worktrees** for parallel agent / feature work
-- Offline evaluations run locally or as **Kubernetes CronJobs**
-- **Flux** reconciles infrastructure + application state
-
-This enables **fast iteration without sacrificing reproducibility**.
-
----
-
-## Roadmap (Condensed)
-
-### Short Term
-- Complete offline evaluation harness
-- Finalize prompt registry + intent-based routing
-
-### Medium Term
-- Full trace–log–metric correlation for LLM requests
-- Grafana dashboards for:
-  - Accuracy drift
-  - Prompt comparisons
-  - Model trade-offs
-
-### Long Term
-- Deep Kubernetes administration mastery
-- Explore *“infra as data”* using CRDs + custom controllers
-- Treat cluster state itself as LLM input
-
----
-
-## Why This Is Built on OpenTelemetry (Not LLM SaaS)
-
-LLM-specific observability platforms add value — but:
-
-**OTel already provides:**
-- Distributed traces
-- Correlated logs + metrics
-- Vendor-neutral instrumentation
-
-This project demonstrates that you can achieve **80–90% of the value** using open standards — **without locking into a proprietary control plane**.
-
-The remaining gap (prompt UIs, human feedback loops) is intentionally explored as a **design problem**, not outsourced.
-
----
-
-## Status
-
-This project is **actively evolving**.  
-Design decisions are documented intentionally — including trade-offs and TODOs — to reflect **real production thinking**, not a polished demo.
+**Goal:** Rigorous A/B testing of prompts with measurable outcomes, not vibes.
