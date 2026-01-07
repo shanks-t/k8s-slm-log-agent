@@ -29,7 +29,7 @@ spec:
       - name: log-analyzer
         # TODO: Update with your GitHub username in .env, then run: just build push
         # Image will be updated by 'just deploy' to use commit SHA
-        image: ghcr.io/shanks-t/log-analyzer:0feff31
+        image: ghcr.io/shanks-t/log-analyzer:8e26217
         imagePullPolicy: Always  # Always pull from ghcr.io for latest version
         ports:
         - containerPort: 8000
@@ -69,3 +69,15 @@ spec:
           periodSeconds: 5
           timeoutSeconds: 3
           failureThreshold: 3
+
+        # Volume mounts
+        volumeMounts:
+        - name: prompts
+          mountPath: /app/prompt_templates
+          readOnly: true
+
+      # Volumes
+      volumes:
+      - name: prompts
+        configMap:
+          name: log-analyzer-prompts
