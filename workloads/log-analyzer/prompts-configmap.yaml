@@ -1,0 +1,56 @@
+---
+# ConfigMap containing prompt templates for log-analyzer
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: log-analyzer-prompts
+  namespace: log-analyzer
+  labels:
+    app: log-analyzer
+data:
+  k8s_log_analysis_v1.yaml: |
+    id: k8s_log_analysis_v1
+    version: v1
+    description: Analyze Kubernetes logs and recommend actions if required
+
+    model_defaults:
+      temperature: 0.3
+      max_tokens: 200
+
+    inputs:
+      required:
+        - logs
+      optional:
+        namespace: unknown
+        component: unknown
+        time_range: unknown
+
+    system: |
+      You are a senior Kubernetes Site Reliability Engineer.
+
+      Your job is to analyze Kubernetes logs and determine whether
+      operational action is required.
+
+      Follow these rules strictly:
+      - Do NOT invent facts not present in the logs
+      - If logs are informational or benign, explicitly say so
+      - Do NOT recommend action unless there is clear evidence
+      - Write concise, plain English
+      - Do NOT use Markdown
+
+      Output format (plain text, in this order):
+      Root cause:
+      Severity:
+      Action required:
+      Recommended steps:
+
+    user: |
+      Context:
+      - Namespace: {{ namespace }}
+      - Component: {{ component }}
+      - Time window: {{ time_range }}
+
+      Logs:
+      ---
+      {{ logs }}
+      ---
