@@ -118,7 +118,17 @@
       "Bash(just stop:*)",
       "Bash(just:*)",
       "Bash(uv run:*)",
-      "Bash(LOG_ANALYZER_PROMPTS_DIR=./prompt_templates uv run pytest:*)"
+      "Bash(LOG_ANALYZER_PROMPTS_DIR=./prompt_templates uv run pytest:*)",
+      "Bash(timeout 3 uv run pytest:*)",
+      "Bash(for i in {1..3})",
+      "Bash(do echo \"=== Run $i ===\")",
+      "Bash(vim:*)",
+      "Bash(brew info:*)",
+      "Bash(brew uninstall:*)",
+      "Bash(brew install:*)",
+      "Bash(nvim:*)",
+      "Bash(code --list-extensions:*)",
+      "Bash(.venv/bin/python:*)"
     ],
     "deny": [],
     "ask": []

@@ -2,7 +2,13 @@
 
 This document provides a comprehensive roadmap for building a reproducible evaluation framework to measure and improve the quality of LLM-powered log analysis.
 
-## Overview
+### Overview
+
+The evaluation framework enables:
+
+- **Scientific experimentation** on LLM configurations (models, parameters, prompts)
+- **Data-driven model selection** based on accuracy vs. latency trade-offs
+-# Overview
 
 The evaluation framework enables:
 
