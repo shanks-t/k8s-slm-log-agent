@@ -1,713 +1,261 @@
-# LLM Evaluation Framework for Log Analysis
+# LLM Evaluation & Prompt Optimization Framework
 
-This document provides a comprehensive roadmap for building a reproducible evaluation framework to measure and improve the quality of LLM-powered log analysis.
-
-### Overview
-
-The evaluation framework enables:
-
-- **Scientific experimentation** on LLM configurations (models, parameters, prompts)
-- **Data-driven model selection** based on accuracy vs. latency trade-offs
--# Overview
-
-The evaluation framework enables:
-
-- **Scientific experimentation** on LLM configurations (models, parameters, prompts)
-- **Data-driven model selection** based on accuracy vs. latency trade-offs
-- **Reproducible results** with versioned datasets, configs, and code
-- **Regression detection** to catch quality degradation over time
-- **Visualization** of experiment results in Grafana
+**Complete roadmap for measuring, improving, and tracking LLM-powered log analysis quality.**
 
 ---
 
-## Architecture
+## Table of Contents
+
+1. [Executive Summary](#executive-summary)
+2. [Architecture Overview](#architecture-overview)
+3. [Golden Dataset (Phase 1 - COMPLETE)](#phase-1-golden-dataset-complete)
+4. [Shared Analyzer Module (Phase 2)](#phase-2-shared-analyzer-module)
+5. [Evaluation Harness (Phase 3)](#phase-3-evaluation-harness)
+6. [Prompt Optimization (Phase 4)](#phase-4-prompt-optimization)
+7. [Grafana Visualization (Phase 5)](#phase-5-grafana-visualization)
+8. [Complete Workflows](#complete-workflows)
+9. [Time Estimates](#time-estimates)
+10. [Implementation Roadmap](#implementation-roadmap)
+
+---
+
+## Executive Summary
+
+This document unifies two complementary systems:
+
+1. **Evaluation Harness** - Measures quality of ANY prompt/model/config against golden dataset
+2. **Prompt Optimizer** - Searches for better prompts using systematic variation
+
+Both systems share:
+- Golden dataset (115 labeled samples, 100% real cluster logs)
+- Metrics module (unified accuracy/quality measures)
+- Grafana dashboards (single view of all experiments and optimizations)
+
+**Key Innovation:** Separate optimization environment (M2 MacBook with GPU) from production environment (K8s cluster with CPU). This enables:
+- ⚡ Fast iteration: 1 minute per experiment (vs 42 minutes in cluster)
+- 🎯 Systematic improvement: Data-driven prompt selection
+- 📊 Continuous monitoring: Track quality over time in Grafana
+- 🏠 Zero cluster impact: Optimize locally, deploy via GitOps
+
+---
+
+## Architecture Overview
+
+### System Components
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│                   UNIFIED EVALUATION SYSTEM                    │
+└────────────────────────────────────────────────────────────────┘
+                              │
+        ┌─────────────────────┼─────────────────────┐
+        │                     │                     │
+        ▼                     ▼                     ▼
+┌──────────────┐    ┌──────────────────┐    ┌──────────────┐
+│   DATASETS   │    │ SHARED ANALYZER  │    │   METRICS    │
+│              │    │                  │    │              │
+│ golden-v1    │◀──▶│ analyzer.py      │◀──▶│ metrics.py   │
+│ - train (60) │    │ prompts.py       │    │              │
+│ - val (55)   │    │ models.py        │    │ • Accuracy   │
+└──────────────┘    └──────────────────┘    │ • Quality    │
+                             │               │ • Latency    │
+                             │               └──────┬───────┘
+                             │                      │
+        ┌────────────────────┴──────────┐           │
+        │                               │           │
+        ▼                               ▼           │
+┌──────────────────┐          ┌──────────────────┐  │
+│ EVAL HARNESS     │          │ PROMPT OPTIMIZER │  │
+│                  │          │                  │  │
+│ • Run exps       │          │ • Generate       │  │
+│ • Full dataset   │          │   candidates     │  │
+│ • Detailed       │          │ • Test on val    │  │
+│   metrics        │          │ • Select best    │  │
+│                  │          │ • Output YAML    │  │
+└────────┬─────────┘          └────────┬─────────┘  │
+         │                             │            │
+         └──────────┬──────────────────┘            │
+                    │                               │
+                    ▼                               │
+         ┌────────────────────┐                     │
+         │  RESULT STORAGE    │◀────────────────────┘
+         │                    │
+         │ experiments/runs/  │
+         │ optimization/runs/ │
+         │ dashboards/*.json  │
+         └──────────┬─────────┘
+                    │
+                    ▼
+         ┌────────────────────┐
+         │ GRAFANA DASHBOARDS │
+         │                    │
+         │ • Leaderboard      │
+         │ • Trends           │
+         │ • Categories       │
+         └────────────────────┘
+```
 
 ### Design Principles
 
-**1. Separation of Concerns**
-```
-Production API (log-analyzer)     Evaluation Harness (evals/)
-└─ Serves real user traffic        └─ Measures quality offline
-   └─ Optimized for latency           └─ No latency constraints
-   └─ Stable configuration            └─ Tests multiple configs
-   └─ Health checks, SLAs             └─ Emits quality metrics
-```
+1. **Separation of Concerns**
+   - Production API (log-analyzer): Optimized for latency, stable config
+   - Evaluation System (evals/): Measures quality offline, tests variations
 
-**2. Shared Core Logic**
-```
-workloads/log-analyzer/src/log_analyzer/core/
-└─ analyzer.py      # Shared by production API and eval scripts
-└─ prompts.py       # Prompt templates (versioned)
-└─ metrics.py       # Evaluation metrics
-└─ models.py        # Data models
-```
+2. **Shared Core Logic**
+   - Single `LogAnalyzer` class used by production, evaluation, and optimization
+   - Ensures what you measure = what you deploy
 
-**3. Execution Models**
+3. **Local Optimization, Remote Deployment**
+   - Optimize on M2 MacBook (fast GPU inference)
+   - Deploy to K8s cluster (CPU inference) via GitOps
+   - No optimization overhead in production
 
-| Execution Mode | When to Use | Trade-offs |
-|----------------|-------------|------------|
-| **Local MacBook** | Development, rapid iteration | ✅ Fast feedback, easy debugging<br>❌ Requires port-forwarding |
-| **K8s CronJob** | Nightly regression testing | ✅ Automated, close to data<br>❌ Slower iteration cycle |
+4. **Git-Reviewable Artifacts**
+   - Prompts are YAML files, not opaque binaries
+   - Experiment results are JSON/JSONL
+   - Everything versioned and reviewable
 
 ---
 
-## Directory Structure
+## Phase 1: Golden Dataset (COMPLETE) ✅
 
-```
-evals/
-├── datasets/                        # Golden datasets (frozen test sets)
-│   ├── golden-v1/                   # Version 1 (150 samples)
-│   │   ├── metadata.json            # Dataset statistics
-│   │   ├── samples.json             # All samples in one file
-│   │   └── samples/                 # Individual sample files (optional)
-│   │       ├── 001-oom-kill.json
-│   │       ├── 002-image-pull.json
-│   │       └── ...
-│   └── golden-v2/                   # Future versions
-│
-├── experiments/
-│   ├── configs/                     # Experiment configurations
-│   │   ├── llama3.2-3b-baseline.yaml
-│   │   ├── llama3.2-3b-temp0.1.yaml
-│   │   ├── llama3.2-1b-fast.yaml
-│   │   └── ...
-│   ├── runs/                        # Experiment results (gitignored)
-│   │   ├── 20251230-120000-llama3.2-3b-baseline/
-│   │   │   ├── config.json          # Frozen experiment snapshot
-│   │   │   ├── results.jsonl        # Per-sample results
-│   │   │   ├── metrics.json         # Aggregated metrics
-│   │   │   └── summary.md           # Human-readable report
-│   │   └── ...
-│   └── leaderboard.json             # Cross-experiment comparison
-│
-├── scripts/
-│   ├── extract_golden_dataset.py    # ✅ Extract real logs from Loki
-│   ├── synthesize_logs.py           # ✅ Generate synthetic logs
-│   ├── combine_datasets.py          # ✅ Merge real + synthetic
-│   ├── dataset_analysis.py          # ✅ Analyze dataset quality
-│   ├── run_experiment.py            # NEW - Run single experiment
-│   ├── compare_experiments.py       # NEW - Compare two runs
-│   ├── export_metrics.py            # NEW - Export to Prometheus/JSON
-│   └── update_leaderboard.py        # NEW - Aggregate results
-│
-└── README.md                        # Quick start guide
-```
+### Status
 
----
+**COMPLETE** - 115 labeled samples ready for evaluation
 
-## Golden Dataset
-
-### Purpose
-
-A **golden dataset** is a frozen, labeled test set used to measure LLM quality consistently across experiments. Think of it as "unit tests for LLM accuracy."
-
-**Critical**: The dataset must contain **realistic samples from your actual cluster** to be valid. Synthetic logs are useful for filling gaps, but the majority should be real.
-
-### Requirements
-
-- **Size**: 100-200 samples (target: 150)
-- **Realism**: 70%+ real logs from your cluster
-- **Diversity**: Cover different namespaces, failure modes, severities
-- **Quality**: Manually labeled ground truth for each sample
-- **Versioning**: Immutable once created (golden-v1, golden-v2, etc.)
-- **Balance**: Representative distribution across categories and severities
-
-### Target Namespace Coverage
-
-Your cluster has these key namespaces to sample from:
-
-| Namespace | Log Type | Priority | Target Samples |
-|-----------|----------|----------|----------------|
-| **kube-system** | Infrastructure errors (kubelet, kube-proxy, etc.) | HIGH | 30-40 |
-| **logging** | Observability stack (Loki, Tempo, Alloy) | HIGH | 20-30 |
-| **llm** | LLM inference errors (llama-cpp) | HIGH | 15-20 |
-| **log-analyzer** | Application logs (FastAPI, analysis errors) | HIGH | 15-20 |
-| **envoy-gateway-system** | Gateway/routing errors | MEDIUM | 10-15 |
-| **flux-system** | GitOps reconciliation | MEDIUM | 10-15 |
-| **kube-flannel** | CNI networking | LOW | 5-10 |
-
-**Why this distribution?**
-- **kube-system**: Most common source of production issues
-- **logging**: Critical for observability, errors here affect everything
-- **llm + log-analyzer**: Your application logs, most relevant for your use case
-- **envoy/flux**: Important but less frequent errors
-- **kube-flannel**: Usually stable, sample for completeness
-
-### Sample Structure
-
-Each sample in the golden dataset has this structure:
+### Dataset Structure
 
 ```json
 {
-  "id": "001",
-  "category": "pod_lifecycle",
-  "severity": "error",
-  "namespace": "kube-system",
-  "logs": [
-    {
-      "timestamp": "2025-12-30T10:15:23Z",
-      "namespace": "kube-system",
-      "pod": "kubelet-node-2",
-      "container": "kubelet",
-      "node": "node-2",
-      "message": "Failed to pull image \"registry.k8s.io/pause:3.9\": rpc error: code = Unknown desc = failed to pull and unpack image"
-    },
-    {
-      "timestamp": "2025-12-30T10:15:20Z",
-      "namespace": "kube-system",
-      "pod": "kubelet-node-2",
-      "container": "kubelet",
-      "node": "node-2",
-      "message": "Back-off pulling image \"registry.k8s.io/pause:3.9\""
-    }
-  ],
-  "ground_truth": {
-    "root_cause": "image_pull_failed",
-    "severity": "error",
-    "component": "kubelet",
-    "summary": "Failed to pull container image from registry, possibly due to network issues or invalid image reference",
-    "action_needed": "investigate_network"
-  },
+  "timestamp": 1766954816856.0,
+  "namespace": "log-analyzer",
+  "pod": "log-analyzer-7669d66676-gvm8p",
+  "container": "log-analyzer",
+  "node": "node-1",
+  "log_line": "...",
+  "detected_severity": "ERROR",
+  "signature_hash": "562e4ddb",
   "source": "real",
-  "extraction_metadata": {
-    "extracted_at": "2025-12-30T12:00:00Z",
-    "query": "{namespace=\"kube-system\"} |~ \"(?i)(pull|image).*failed\"",
-    "loki_labels": {
-      "namespace": "kube-system",
-      "pod": "kubelet-node-2",
-      "container": "kubelet"
-    }
-  }
+  "root_cause": "tempo_unavailable",
+  "severity": "warn",
+  "component": "opentelemetry_exporter",
+  "summary": "OpenTelemetry exporter cannot reach Tempo service",
+  "action_needed": "monitor"
 }
 ```
 
-### Creating the Dataset
+### Dataset Statistics
 
-#### Step 1: Extract Real Logs from Your Cluster
+- **Total samples:** 115 (100% real cluster logs)
+- **Severity distribution:**
+  - ERROR: 79 (69%)
+  - WARN: 28 (24%)
+  - INFO: 5 (4%)
+  - CRITICAL: 3 (3%)
+- **Namespace coverage:**
+  - log-analyzer: 30 (26%)
+  - kube-system: 20 (17%)
+  - envoy-gateway-system: 20 (17%)
+  - flux-system: 19 (17%)
+  - llm: 18 (16%)
+  - logging: 8 (7%)
+- **Failure categories:** 21 unique categories
 
-Port-forward to Loki:
+### Train/Validation Split
+
+For prompt optimization, we split the dataset:
+
 ```bash
-kubectl port-forward -n logging svc/loki 3100:3100
-```
-
-Run the extraction script with targeted queries for your namespaces:
-
-```bash
+# Create train/validation split (60/55)
 cd evals
-uv run python extract_golden_dataset.py
+uv run python scripts/split_dataset.py golden-v1.json
+
+# Output:
+# - golden-v1-train.json (60 samples) - For few-shot examples
+# - golden-v1-validation.json (55 samples) - For optimization search
 ```
 
-The script (`extract_golden_dataset.py`) queries Loki with these high-value patterns across your namespaces:
+**Rationale for 60/55 split:**
+- **Training (60 samples):** Used to extract few-shot examples during optimization
+- **Validation (55 samples):** Used to measure candidate prompts during search
+- **Full (115 samples):** Used for final experiments and production validation
 
-**Infrastructure Errors (kube-system)**:
-- Pod lifecycle: `{namespace="kube-system"} |~ "(?i)(backoff|crashloop|oomkilled|evicted)"`
-- Image problems: `{namespace="kube-system"} |~ "(?i)(imagepull|errimage|failed to pull)"`
-- Kubelet errors: `{namespace="kube-system",container="kubelet"} |~ "(?i)error"`
-- DNS failures: `{namespace="kube-system"} |~ "(?i)(no such host|dns.*timeout)"`
+### Location
 
-**Observability Stack (logging)**:
-- Loki errors: `{namespace="logging",pod=~"loki-.*"} |~ "(?i)(error|failed|panic)"`
-- Tempo errors: `{namespace="logging",pod=~"tempo-.*"} |~ "(?i)(error|failed)"`
-- Alloy errors: `{namespace="logging",pod=~"alloy-.*"} |~ "(?i)(error|failed)"`
-
-**Application Logs (llm, log-analyzer)**:
-- LLM inference errors: `{namespace="llm"} |~ "(?i)(error|failed|timeout|context.*exceeded)"`
-- Log analyzer errors: `{namespace="log-analyzer"} |~ "(?i)(error|exception|failed)"`
-
-**Gateway & GitOps (envoy-gateway-system, flux-system)**:
-- Envoy errors: `{namespace="envoy-gateway-system"} |~ "(?i)(upstream|connection|error)"`
-- Flux reconciliation: `{namespace="flux-system"} |~ "(?i)(failed|error|reconciliation)"`
-
-**Networking (kube-flannel)**:
-- CNI errors: `{namespace="kube-flannel"} |~ "(?i)(error|failed)"`
-
-**What the script does**:
-1. Queries Loki with targeted LogQL for each namespace
-2. Filters out noise (successful health checks, routine logs)
-3. Detects severity levels automatically
-4. Deduplicates by error signature
-5. Performs stratified sampling to get balanced distribution
-6. Saves to `golden_dataset_real.json`
-
-**Expected output**:
-- 70-100 real logs from your cluster
-- Automatic severity detection
-- Balanced across namespaces
-- Rich contextual information
-
-#### Step 2: Generate Synthetic Logs (Fill Gaps)
-
-Generate synthetic logs for failure modes not present in your real logs:
-
-```bash
-uv run python synthesize_logs.py
 ```
-
-This creates `golden_dataset_synthetic.json` with:
-- 30-50 synthetic samples
-- Pre-labeled ground truth
-- Coverage for rare failure scenarios (e.g., certificate expiration, RBAC denials)
-
-#### Step 3: Combine Real + Synthetic
-
-Merge to create final balanced dataset:
-
-```bash
-uv run python combine_datasets.py
-```
-
-Creates `golden_dataset_unlabeled.json` with:
-- 150 total samples
-- 70% real, 30% synthetic
-- Target distribution: 25% INFO, 25% WARN, 40% ERROR, 10% CRITICAL
-
-#### Step 4: Analyze Quality
-
-Review the dataset quality:
-
-```bash
-uv run python dataset_analysis.py
-```
-
-Outputs:
-- Severity distribution
-- Namespace coverage
-- Category breakdown
-- Labeling completeness
-- Quality recommendations
-
-#### Step 5: Manual Review & Labeling
-
-**Critical step**: Manually review and label real logs.
-
-```bash
-# Open the unlabeled dataset
-cat golden_dataset_unlabeled.json | jq '.' | less
-
-# For each real log (source: "real"), fill in ground_truth:
-# - root_cause: Error category (e.g., "image_pull_failed", "dns_timeout")
-# - severity: "info" | "warn" | "error" | "critical"
-# - component: Affected component (e.g., "kubelet", "loki/ingester")
-# - summary: 1-2 sentence description
-# - action_needed: "investigate" | "fix_config" | "scale" | "monitor" | "ignore"
-
-# Save labeled version
-# (Edit in VS Code or your preferred editor)
-```
-
-**Labeling guidelines**:
-- **root_cause**: Use consistent categories (see Categories section below)
-- **severity**: Match Kubernetes severity conventions
-  - INFO: Informational, no action needed
-  - WARN: Potential issue, monitor
-  - ERROR: Problem affecting functionality, needs investigation
-  - CRITICAL: Service outage, immediate action
-- **component**: Format as `namespace/container` or just component name
-- **summary**: Describe WHAT happened (not just repeating the error)
-- **action_needed**: What should an SRE do?
-
-#### Step 6: Create Versioned Dataset
-
-```bash
-# Create golden-v1 directory
-mkdir -p datasets/golden-v1
-
-# Copy labeled dataset
-cp golden_dataset_labeled.json datasets/golden-v1/samples.json
-
-# Create metadata
-cat > datasets/golden-v1/metadata.json <<EOF
-{
-  "version": "golden-v1",
-  "created": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "description": "Initial golden dataset from homelab cluster",
-  "sample_count": 150,
-  "severity_distribution": {
-    "INFO": 37,
-    "WARN": 38,
-    "ERROR": 60,
-    "CRITICAL": 15
-  },
-  "namespace_distribution": {
-    "kube-system": 35,
-    "logging": 25,
-    "llm": 18,
-    "log-analyzer": 17,
-    "envoy-gateway-system": 12,
-    "flux-system": 12,
-    "kube-flannel": 8
-  },
-  "categories": [
-    "pod_lifecycle",
-    "image_pull",
-    "network",
-    "dns",
-    "storage",
-    "config",
-    "infrastructure",
-    "llm_inference",
-    "observability"
-  ],
-  "real_vs_synthetic": {
-    "real": 105,
-    "synthetic": 45
-  }
-}
-EOF
-```
-
-### Failure Categories
-
-Standardize root_cause labels across samples:
-
-**Pod Lifecycle**:
-- `container_oom_killed`
-- `crashloop_backoff`
-- `pod_evicted`
-- `container_exit_nonzero`
-
-**Image Issues**:
-- `image_pull_failed`
-- `image_pull_backoff`
-- `image_not_found`
-- `registry_unreachable`
-
-**Network**:
-- `connection_refused`
-- `connection_timeout`
-- `network_unreachable`
-- `service_no_endpoints`
-
-**DNS**:
-- `dns_resolution_failed`
-- `dns_timeout`
-- `nxdomain`
-
-**Storage**:
-- `pvc_mount_failed`
-- `pvc_pending`
-- `disk_pressure`
-- `volume_not_found`
-
-**Configuration**:
-- `configmap_not_found`
-- `secret_not_found`
-- `invalid_yaml`
-- `rbac_permission_denied`
-
-**LLM Inference**:
-- `llm_context_exceeded`
-- `llm_timeout`
-- `llm_model_load_failed`
-- `llm_oom`
-
-**Observability**:
-- `loki_ingester_failed`
-- `tempo_ingestion_error`
-- `alloy_scrape_failed`
-- `metrics_export_failed`
-
----
-
-## Experiment Configuration
-
-Each experiment is defined by a YAML configuration file:
-
-```yaml
-# evals/experiments/configs/llama3.2-3b-baseline.yaml
-experiment_id: "llama3.2-3b-baseline"
-description: "Baseline configuration with llama 3.2 3B model"
-
-dataset:
-  version: "golden-v1"
-
-model:
-  endpoint: "http://localhost:8080"  # Port-forward to K8s
-  name: "llama-3.2-3b-instruct"
-
-llm_config:
-  temperature: 0.3
-  max_tokens: 200
-  top_p: 0.95
-  frequency_penalty: 0.0
-  presence_penalty: 0.0
-
-prompt:
-  template: "root_cause_v1"
-  system_prompt: |
-    You are a Kubernetes reliability engineer.
-    Analyze logs and identify root cause, severity, and recommended actions.
-
-    Output format:
-    Root Cause: <category>
-    Severity: <info|warn|error|critical>
-    Component: <namespace/container>
-    Summary: <1-2 sentence description>
-    Action: <investigate|fix_config|scale|monitor|ignore>
-```
-
-### Experiment Variants
-
-Create multiple configurations to test:
-
-**Model Variants:**
-```yaml
-# llama3.2-3b-q4.yaml (current, faster)
-model:
-  name: "llama-3.2-3b-instruct"
-  file: "llama-3.2-3b-instruct-q4_k_m.gguf"
-
-# llama3.2-3b-q8.yaml (slower, more accurate?)
-model:
-  name: "llama-3.2-3b-instruct-q8"
-  file: "llama-3.2-3b-instruct-q8_0.gguf"
-
-# llama3.2-1b-q4.yaml (faster, less accurate?)
-model:
-  name: "llama-3.2-1b-instruct"
-  file: "llama-3.2-1b-instruct-q4_k_m.gguf"
-```
-
-**Temperature Variants:**
-```yaml
-# High precision (deterministic)
-llm_config:
-  temperature: 0.1
-
-# Balanced
-llm_config:
-  temperature: 0.3
-
-# Creative (more variation)
-llm_config:
-  temperature: 0.5
-```
-
-**Prompt Variants:**
-```yaml
-# Structured output
-prompt:
-  template: "structured_v1"
-
-# Chain-of-thought reasoning
-prompt:
-  template: "cot_v1"
-
-# Few-shot examples
-prompt:
-  template: "fewshot_v1"
+evals/
+├── golden-v1.json              # Full dataset (115 samples)
+├── golden-v1-train.json        # Training split (60 samples)
+└── golden-v1-validation.json   # Validation split (55 samples)
 ```
 
 ---
 
-## Running Experiments
+## Phase 2: Shared Analyzer Module
 
-### Setup
+### Goal
 
-```bash
-# 1. Ensure golden dataset exists
-ls -la evals/datasets/golden-v1/samples.json
+Extract core log analysis logic into a reusable module shared by:
+1. Production API (`main.py`)
+2. Evaluation harness (`run_experiment.py`)
+3. Prompt optimizer (`run_optimization.py`)
 
-# 2. Start port-forwards to K8s services
-just dev
-# This starts:
-# - Loki port-forward (not needed for evals, but useful)
-# - llama-cpp port-forward (needed)
-# - Tempo port-forward (optional, for tracing)
+This ensures **what you measure = what you deploy**.
 
-# 3. Verify services are accessible
-curl http://localhost:8080/health  # llama-cpp
-```
-
-### Run Single Experiment
-
-```bash
-# Run experiment with config file
-cd /Users/treyshanks/workspace/k8s-slm-log-agent
-just experiment llama3.2-3b-baseline
-
-# This executes:
-# uv run python evals/scripts/run_experiment.py \
-#   evals/experiments/configs/llama3.2-3b-baseline.yaml
-```
-
-### What Happens During Experiment
+### Directory Structure
 
 ```
-1. Load experiment config
-2. Load golden dataset (golden-v1)
-3. Initialize LogAnalyzer with config
-4. For each sample in dataset:
-   a. Run analysis using shared LogAnalyzer
-   b. Compare result with ground_truth
-   c. Compute metrics (accuracy, latency, tokens)
-   d. Save individual result
-5. Aggregate metrics across all samples
-6. Save results to experiments/runs/<timestamp>-<exp-id>/
-7. Update leaderboard.json
-8. Print summary
+workloads/log-analyzer/src/log_analyzer/
+├── main.py                      # FastAPI application (uses core/)
+├── core/                        # NEW - Shared logic
+│   ├── __init__.py
+│   ├── analyzer.py              # LogAnalyzer class
+│   ├── prompts.py               # Prompt template management
+│   └── models.py                # Data models
+└── evaluation/                  # NEW - Evaluation-specific
+    ├── __init__.py
+    ├── metrics.py               # Quality metrics
+    └── utils.py                 # Eval helpers
 ```
 
-### Experiment Output
-
-```
-experiments/runs/20251230-120000-llama3.2-3b-baseline/
-├── config.json          # Frozen experiment configuration
-│   {
-│     "experiment_id": "llama3.2-3b-baseline",
-│     "run_timestamp": "2025-12-30T12:00:00Z",
-│     "dataset_version": "golden-v1",
-│     "model": {...},
-│     "llm_config": {...},
-│     "git_commit": "72ee353"
-│   }
-│
-├── results.jsonl        # Per-sample results (JSONL for streaming)
-│   {"sample_id":"001","predicted_root_cause":"container_oom_killed",...}
-│   {"sample_id":"002","predicted_root_cause":"image_pull_failed",...}
-│   ...
-│
-├── metrics.json         # Aggregated metrics
-│   {
-│     "accuracy": {
-│       "root_cause_exact_match": 0.82,
-│       "severity_classification": 0.94,
-│       "component_detection": 0.88
-│     },
-│     "performance": {
-│       "avg_latency_ms": 1850,
-│       "p95_latency_ms": 2400,
-│       "total_tokens": 125000
-│     },
-│     "per_category": {...}
-│   }
-│
-└── summary.md           # Human-readable report
-    # Experiment Summary
-
-    **Experiment ID:** llama3.2-3b-baseline
-    **Dataset:** golden-v1 (150 samples)
-    **Model:** llama-3.2-3b-instruct
-
-    ## Results
-    - Root Cause Accuracy: 82%
-    - Severity Accuracy: 94%
-    - Average Latency: 1850ms
-
-    ## Top Failures
-    1. Network errors: 50% accuracy (20/40 samples)
-    2. DNS failures: 65% accuracy (13/20 samples)
-    ...
-```
-
----
-
-## Evaluation Metrics
-
-### Accuracy Metrics
-
-**1. Root Cause Exact Match**
-```python
-correct = predicted_root_cause == ground_truth_root_cause
-accuracy = correct_count / total_samples
-```
-
-**2. Severity Classification**
-```python
-# Confusion matrix: INFO, WARN, ERROR, CRITICAL
-from sklearn.metrics import classification_report
-
-report = classification_report(
-    y_true=[s.ground_truth.severity for s in samples],
-    y_pred=[s.predicted.severity for s in samples]
-)
-```
-
-**3. Component Detection (F1 Score)**
-```python
-# Partial credit for component name similarity
-from sklearn.metrics import f1_score
-
-f1 = f1_score(
-    y_true=[s.ground_truth.component for s in samples],
-    y_pred=[s.predicted.component for s in samples],
-    average='weighted'
-)
-```
-
-**4. Summary Quality (ROUGE Score)**
-```python
-# Measure overlap between predicted and ground truth summaries
-from rouge_score import rouge_scorer
-
-scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'])
-scores = scorer.score(ground_truth_summary, predicted_summary)
-```
-
-### Quality Metrics
-
-**1. Hallucination Rate**
-```python
-# Did LLM mention logs that don't exist?
-hallucination_rate = samples_with_hallucinations / total_samples
-```
-
-**2. Missed Log Rate**
-```python
-# Did LLM ignore important logs from input?
-missed_rate = samples_with_missed_logs / total_samples
-```
-
-### Performance Metrics
-
-**1. Latency**
-```python
-avg_latency_ms = sum(latencies) / len(latencies)
-p95_latency_ms = np.percentile(latencies, 95)
-p99_latency_ms = np.percentile(latencies, 99)
-```
-
-**2. Token Usage**
-```python
-total_tokens = sum(sample.tokens_used for sample in samples)
-avg_tokens_per_sample = total_tokens / len(samples)
-cost_usd = total_tokens * COST_PER_TOKEN
-```
-
-### Per-Category Metrics
-
-Break down accuracy by failure category:
-
-```python
-categories = ["pod_lifecycle", "image_pull", "network", "dns", "storage", "config", "llm_inference"]
-
-for category in categories:
-    category_samples = [s for s in samples if s.category == category]
-    category_accuracy = compute_accuracy(category_samples)
-    print(f"{category}: {category_accuracy:.1%}")
-```
-
----
-
-## Shared Library Pattern
-
-### Core Analyzer Module
+### Core Analyzer API
 
 ```python
 # workloads/log-analyzer/src/log_analyzer/core/analyzer.py
-"""
-Shared analysis logic used by both production API and evaluation scripts.
-"""
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Dict, Any
 import httpx
+from opentelemetry import trace
 
 @dataclass
 class LLMConfig:
+    """LLM inference configuration."""
     temperature: float = 0.3
     max_tokens: int = 200
     top_p: float = 0.95
+    frequency_penalty: float = 0.0
+    presence_penalty: float = 0.0
+
+@dataclass
+class LogEntry:
+    """Normalized log entry."""
+    timestamp: str
+    namespace: str
+    pod: str
+    container: str
+    node: str
+    message: str
+
+@dataclass
+class Analysis:
+    """Structured analysis result."""
+    root_cause: str
+    severity: str
+    component: str
+    summary: str
+    action_needed: str
+    raw_response: str  # For debugging
 
 class LogAnalyzer:
     """
@@ -715,636 +263,648 @@ class LogAnalyzer:
 
     Shared by:
     - Production API (main.py)
-    - Evaluation scripts (run_experiment.py)
-    - Unit tests (test_analyzer.py)
+    - Evaluation harness (run_experiment.py)
+    - Prompt optimizer (run_optimization.py)
     """
 
-    def __init__(self, llm_url: str, model_name: str, config: LLMConfig):
+    def __init__(
+        self,
+        llm_url: str,
+        model_name: str,
+        prompt_template: str,
+        config: LLMConfig,
+        tracer: trace.Tracer = None
+    ):
         self.llm_url = llm_url
         self.model_name = model_name
+        self.prompt_template = prompt_template
         self.config = config
+        self.tracer = tracer
 
-    def build_prompt(self, logs: List[LogEntry]) -> str:
-        """Build LLM prompt from logs."""
-        # Shared prompt building logic
+    def build_prompt(
+        self,
+        logs: List[LogEntry],
+        namespace: str = "unknown",
+        time_range: str = "unknown"
+    ) -> Dict[str, Any]:
+        """
+        Build LLM prompt from logs using configured template.
+
+        Returns messages array for OpenAI-compatible API.
+        """
+        # Load template (from registry or inline)
+        # Render with Jinja2
+        # Return {"messages": [...]}
         pass
 
-    async def call_llm(self, prompt: str) -> str:
-        """Call LLM API."""
-        # Shared LLM calling logic
-        pass
+    async def call_llm(self, messages: List[Dict]) -> str:
+        """
+        Call LLM API with messages.
+
+        Returns raw LLM response text.
+        """
+        span = self.tracer.start_span("call_llm") if self.tracer else None
+
+        try:
+            async with httpx.AsyncClient(timeout=180) as client:
+                resp = await client.post(
+                    f"{self.llm_url}/v1/chat/completions",
+                    json={
+                        "model": self.model_name,
+                        "messages": messages,
+                        "temperature": self.config.temperature,
+                        "max_tokens": self.config.max_tokens,
+                        "top_p": self.config.top_p,
+                    }
+                )
+                resp.raise_for_status()
+                data = resp.json()
+
+                if span:
+                    span.set_attribute("llm.tokens_prompt", data["usage"]["prompt_tokens"])
+                    span.set_attribute("llm.tokens_completion", data["usage"]["completion_tokens"])
+
+                return data["choices"][0]["message"]["content"]
+        finally:
+            if span:
+                span.end()
 
     def parse_response(self, llm_response: str) -> Analysis:
-        """Parse LLM response into structured output."""
-        # Shared parsing logic
+        """
+        Parse LLM response into structured Analysis object.
+
+        Handles various output formats gracefully.
+        """
+        # Extract fields using regex or simple parsing
+        # Return Analysis dataclass
         pass
 
-    async def analyze(self, logs: List[LogEntry]) -> Analysis:
-        """Main analysis entrypoint."""
-        prompt = self.build_prompt(logs)
-        response = await self.call_llm(prompt)
-        return self.parse_response(response)
+    async def analyze(
+        self,
+        logs: List[LogEntry],
+        namespace: str = "unknown",
+        time_range: str = "unknown"
+    ) -> Analysis:
+        """
+        Main analysis entrypoint.
+
+        This is the ONLY method called by production/eval/optimizer.
+        """
+        span = self.tracer.start_span("analyze") if self.tracer else None
+
+        try:
+            messages = self.build_prompt(logs, namespace, time_range)
+            response = await self.call_llm(messages["messages"])
+            analysis = self.parse_response(response)
+            return analysis
+        finally:
+            if span:
+                span.end()
 ```
 
-### Usage in Production
+### Metrics Module
 
 ```python
-# workloads/log-analyzer/src/log_analyzer/main.py
-from log_analyzer.core.analyzer import LogAnalyzer, LLMConfig
+# workloads/log-analyzer/evaluation/metrics.py
 
-# Initialize once at startup
-analyzer = LogAnalyzer(
-    llm_url=LLAMA_URL,
-    model_name=MODEL_NAME,
-    config=LLMConfig(temperature=0.3)
-)
+from typing import Dict, Any
+from dataclasses import dataclass
 
-@app.post("/v1/analyze")
-async def analyze_logs(request: AnalyzeRequest):
-    logs = await query_loki(request.filters)
-    analysis = await analyzer.analyze(logs)
-    return {"analysis": analysis.summary, ...}
-```
+@dataclass
+class MetricResult:
+    """Result of evaluating a single prediction."""
+    # Core accuracy (used by optimizer)
+    root_cause_exact_match: float  # 0.0 or 1.0
+    severity_exact_match: float
+    action_exact_match: float
 
-### Usage in Evaluation
+    # Quality metrics (used by harness)
+    component_f1: float  # 0.0 to 1.0
+    summary_rouge_l: float  # 0.0 to 1.0
 
-```python
-# evals/scripts/run_experiment.py
-import sys
-from pathlib import Path
+    # Aggregate score (primary optimization target)
+    overall: float
 
-# Add log-analyzer to Python path
-sys.path.append(str(Path(__file__).parent.parent.parent / "workloads" / "log-analyzer" / "src"))
+def exact_match(expected: str, predicted: str) -> float:
+    """Binary exact match: 1.0 if match, 0.0 otherwise."""
+    return 1.0 if expected.strip().lower() == predicted.strip().lower() else 0.0
 
-from log_analyzer.core.analyzer import LogAnalyzer, LLMConfig
+def semantic_similarity(expected: str, predicted: str) -> float:
+    """
+    Jaccard similarity between tokenized strings.
 
-async def run_experiment(config: Dict):
-    # Initialize analyzer with experiment config
-    analyzer = LogAnalyzer(
-        llm_url=config["model"]["endpoint"],
-        model_name=config["model"]["name"],
-        config=LLMConfig(**config["llm_config"])
+    Simple but effective for log analysis.
+    Can upgrade to embeddings later if needed.
+    """
+    exp_tokens = set(expected.lower().split())
+    pred_tokens = set(predicted.lower().split())
+
+    if not exp_tokens and not pred_tokens:
+        return 1.0
+    if not exp_tokens or not pred_tokens:
+        return 0.0
+
+    intersection = len(exp_tokens & pred_tokens)
+    union = len(exp_tokens | pred_tokens)
+
+    return intersection / union if union > 0 else 0.0
+
+def component_f1_score(expected: str, predicted: str) -> float:
+    """
+    F1 score for component detection.
+
+    Handles partial matches (e.g., "kubelet" vs "kube-system/kubelet").
+    """
+    # Simple implementation: token-based similarity
+    return semantic_similarity(expected, predicted)
+
+def rouge_score(expected: str, predicted: str) -> float:
+    """
+    ROUGE-L score for summary quality.
+
+    Measures longest common subsequence between summaries.
+    """
+    # Simple approximation: use semantic similarity
+    # Can upgrade to real ROUGE library later
+    return semantic_similarity(expected, predicted)
+
+def evaluate_prediction(
+    expected: Dict[str, Any],
+    predicted: Dict[str, Any]
+) -> MetricResult:
+    """
+    Unified metrics used by BOTH evaluation harness AND optimizer.
+
+    Priority ranking (from user):
+    1. Root cause accuracy (40%)
+    2. Action accuracy (25%)
+    3. Severity accuracy (20%)
+    4. Summary quality (10%)
+    5. Component F1 (5%)
+
+    Args:
+        expected: Ground truth from golden dataset
+        predicted: LLM's analysis output
+
+    Returns:
+        MetricResult with all metrics computed
+    """
+    # Core accuracy (binary)
+    root_cause_match = exact_match(
+        expected.get("root_cause", ""),
+        predicted.get("root_cause", "")
+    )
+    severity_match = exact_match(
+        expected.get("severity", ""),
+        predicted.get("severity", "")
+    )
+    action_match = exact_match(
+        expected.get("action_needed", ""),
+        predicted.get("action_needed", "")
     )
 
-    # Load golden dataset
-    dataset = load_golden_dataset(config["dataset"]["version"])
+    # Quality metrics (continuous)
+    component_f1 = component_f1_score(
+        expected.get("component", ""),
+        predicted.get("component", "")
+    )
+    summary_rouge = rouge_score(
+        expected.get("summary", ""),
+        predicted.get("summary", "")
+    )
 
-    # Run evaluation
-    for sample in dataset:
-        analysis = await analyzer.analyze(sample["logs"])
+    # Weighted overall score
+    overall = (
+        root_cause_match * 0.40 +
+        action_match * 0.25 +
+        severity_match * 0.20 +
+        summary_rouge * 0.10 +
+        component_f1 * 0.05
+    )
 
-        # Compare with ground truth
-        is_correct = analysis.root_cause == sample["ground_truth"]["root_cause"]
-
-        # Save result
-        save_result(sample["id"], analysis, is_correct)
+    return MetricResult(
+        root_cause_exact_match=root_cause_match,
+        severity_exact_match=severity_match,
+        action_exact_match=action_match,
+        component_f1=component_f1,
+        summary_rouge_l=summary_rouge,
+        overall=overall
+    )
 ```
+
+### Success Criteria
+
+- [ ] `LogAnalyzer` class created in `core/analyzer.py`
+- [ ] Metrics module created in `evaluation/metrics.py`
+- [ ] Production `main.py` uses shared analyzer
+- [ ] All tests pass
+- [ ] No behavior changes in production API
+
+**Time estimate:** 1-2 days
 
 ---
 
-## Visualization in Grafana
+## Phase 3: Evaluation Harness
 
-### Setup
+### Goal
 
-1. **Install Grafana Infinity Plugin**
-```bash
-# On Grafana pod or via Helm values
-kubectl exec -it -n logging deployment/grafana -- \
-  grafana-cli plugins install yesoreyeram-infinity-datasource
+Build a system to run reproducible experiments that measure LLM quality against the golden dataset.
 
-# Restart Grafana
-kubectl rollout restart -n logging deployment/grafana
+### Directory Structure
+
+```
+evals/
+├── datasets/
+│   ├── golden-v1.json              # Full dataset
+│   ├── golden-v1-train.json        # Training split
+│   └── golden-v1-validation.json   # Validation split
+│
+├── experiments/
+│   ├── configs/                    # Experiment configurations
+│   │   ├── baseline-v1.yaml
+│   │   ├── optimized-v2.yaml
+│   │   ├── llama-1b-fast.yaml
+│   │   └── high-temp.yaml
+│   │
+│   ├── runs/                       # Experiment results (gitignored)
+│   │   ├── 20250109-143000-baseline-v1/
+│   │   │   ├── config.json         # Frozen config snapshot
+│   │   │   ├── results.jsonl       # Per-sample results
+│   │   │   ├── metrics.json        # Aggregated metrics
+│   │   │   └── summary.md          # Human-readable report
+│   │   └── ...
+│   │
+│   └── leaderboard.json            # Cross-experiment comparison
+│
+└── scripts/
+    ├── run_experiment.py           # Run single experiment
+    ├── compare_experiments.py      # Compare two experiments
+    └── update_leaderboard.py       # Aggregate results
 ```
 
-2. **Configure Infinity Datasource**
-- Navigate to Grafana → Configuration → Data Sources
-- Add new "Infinity" datasource
-- Configure to read JSON files from eval results
+### Experiment Configuration
 
-### Dashboard: Experiment Leaderboard
+```yaml
+# evals/experiments/configs/baseline-v1.yaml
 
-**Panel: Table**
-```json
-{
-  "datasource": "Infinity",
-  "type": "table",
-  "targets": [
-    {
-      "type": "json",
-      "source": "url",
-      "url": "http://localhost:8000/api/evals/leaderboard",
-      "format": "table",
-      "columns": [
-        {"selector": "experiment_id", "text": "Experiment", "type": "string"},
-        {"selector": "model_name", "text": "Model", "type": "string"},
-        {"selector": "accuracy", "text": "Accuracy", "type": "number"},
-        {"selector": "avg_latency_ms", "text": "Latency (ms)", "type": "number"},
-        {"selector": "cost_usd", "text": "Cost ($)", "type": "number"}
-      ]
-    }
-  ]
-}
+experiment_id: "baseline-v1"
+description: "Baseline with current prompt v1"
+
+dataset:
+  path: "evals/golden-v1.json"  # Full dataset for experiments
+
+model:
+  endpoint: "http://localhost:8080"  # M2 MacBook llama-server
+  name: "llama-3.2-3b-instruct"
+
+llm_config:
+  temperature: 0.3
+  max_tokens: 200
+  top_p: 0.95
+
+prompt:
+  id: "k8s_log_analysis_v1"
+  path: "workloads/log-analyzer/prompt_templates/k8s_log_analysis_v1.yaml"
+
+execution:
+  concurrency: 4  # Parallel requests (M2 can handle this)
 ```
 
-### Dashboard: Accuracy Over Time
+### Justfile Integration
 
-**Panel: Time Series**
+```makefile
+# justfile (add to root)
+
+# Run an experiment
+experiment config_name:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd workloads/log-analyzer
+    uv run python ../../evals/scripts/run_experiment.py \
+        ../../evals/experiments/configs/{{config_name}}.yaml
+
+# Compare two experiments
+compare exp1 exp2:
+    uv run python evals/scripts/compare_experiments.py {{exp1}} {{exp2}}
+
+# Update leaderboard
+leaderboard:
+    uv run python evals/scripts/update_leaderboard.py
 ```
-Query: Read from experiments/leaderboard.json
-X-axis: run_timestamp
-Y-axis: accuracy
-Group by: experiment_id
-```
 
-### Dashboard: Accuracy by Category
+### Success Criteria
 
-**Panel: Bar Chart**
-```
-Query: Read from latest experiment run metrics.json
-X-axis: category (pod_lifecycle, image_pull, network, etc.)
-Y-axis: accuracy
-```
+- [ ] Experiment runner script works
+- [ ] Can run full experiment in ~1 minute (M2, 4x parallelization)
+- [ ] Results saved in structured format
+- [ ] Summary report generated
+- [ ] Justfile commands working
 
-### Serving Leaderboard via API (Optional)
-
-```python
-# workloads/log-analyzer/src/log_analyzer/main.py
-
-@app.get("/api/evals/leaderboard")
-async def get_leaderboard():
-    """Serve leaderboard for Grafana Infinity datasource."""
-    leaderboard_path = Path(__file__).parent.parent.parent.parent / "evals" / "experiments" / "leaderboard.json"
-
-    with open(leaderboard_path) as f:
-        return json.load(f)
-```
+**Time estimate:** 2-3 days
 
 ---
 
-## Roadmap
+## Phase 4: Prompt Optimization
 
-### Phase 1: Dataset Finalization ✅ COMPLETE
+### Goal
 
-**Goal**: Production-ready golden dataset with ground truth labels from real cluster logs
+Systematically search for better prompts using the validation dataset.
 
-**Tasks**:
-- [x] Start Loki port-forward: `kubectl port-forward -n logging svc/loki 3100:3100`
-- [x] Run extraction workflow with severity filters and extended time windows:
-  ```bash
-  cd evals
-  uv run python extract_by_namespace_and_severity.py
-  ```
-- [x] Extract additional logs from previous evaluation runs:
-  ```bash
-  uv run python extract_from_previous_evals.py
-  ```
-- [x] Merge and rebalance datasets with namespace priorities:
-  ```bash
-  uv run python merge_and_rebalance.py
-  ```
-- [x] **Complete**: Automated + manual labeling of all logs
-  - Created 30 hand-labeled samples (`sample_labeled.json`)
-  - Created comprehensive labeling guide (`LABELING_GUIDE.md`)
-  - Automated labeling of remaining 85 logs using pattern matching (`label_all_logs.py`)
-  - Final dataset: `golden_dataset.json` (100% labeled)
-- [x] Analyze quality: `uv run python dataset_analysis.py golden_dataset.json`
-- [x] Create versioned dataset:
-  ```bash
-  cp golden_dataset.json golden-v1.json
-  ```
+### How It Works
 
-**Deliverable**: `evals/golden-v1.json` ✅ (115 fully labeled samples, 100% real)
+```
+1. Define Search Space
+   ├─ Instruction variants (3 options)
+   ├─ Few-shot strategies (4 options)
+   ├─ Reasoning approaches (3 options)
+   └─ Output formats (3 options)
+   Total: 3×4×3×3 = 108 combinations
 
-**Results Achieved**:
-- ✅ 115 total samples (100% real cluster logs, 0% synthetic)
-- ✅ Severity distribution:
-  - ERROR: 79 (69%) - actionable failures
-  - WARN: 28 (24%) - transient issues
-  - INFO: 5 (4%) - informational
-  - CRITICAL: 3 (3%) - manual intervention needed
-- ✅ Namespace coverage (prioritized log-analyzer + llm):
-  - log-analyzer: 30 (26%)
-  - kube-system: 20 (17%)
-  - envoy-gateway-system: 20 (17%)
-  - flux-system: 19 (17%)
-  - llm: 18 (16%)
-  - logging: 8 (7%)
-- ✅ 100% of samples have complete ground_truth labels
-- ✅ 21 unique failure categories:
-  - Top: apiserver_not_ready (14), empty_query_result (11), context_size_exceeded (10), metrics_server_missing (9), exception_stacktrace (8)
-- ✅ Action distribution reveals real cluster issues:
-  - investigate: 43 (37%) - real errors requiring attention
-  - none: 29 (25%) - expected/transient
-  - increase_context_size: 10 (9%) - identified config issue
-  - wait_for_apiserver: 14 (12%) - startup transients
+2. Sample Candidates (10 random)
 
-**Key Insights**:
-- Used LogQL severity filters (`|~ "(?i)(error|warn|critical)"`) to exclude INFO noise
-- Extended lookback windows (7-14 days) to capture rare failures
-- Discovered actionable issues: LLM context size too small (10 errors), Flux Helm failures (9 errors)
-- Pattern-based labeling enabled systematic classification across 21 failure types
+3. Evaluate Each Candidate
+   ├─ Test on validation set (55 samples)
+   ├─ Compute overall score
+   └─ Time: 55 × 2s = 110s per candidate
 
----
+4. Select Winner
+   ├─ Rank by overall score
+   ├─ Export best as k8s_log_analysis_v2.yaml
+   └─ Save all results
 
-### Phase 2: Offline Evaluation Harness (Week 3-4)
+5. Validate Winner
+   ├─ Run full experiment (115 samples)
+   └─ Compare with baseline
+```
 
-**Goal**: Run reproducible experiments against golden dataset
+### Search Space Definition
 
-**Tasks**:
-- [ ] Create shared `LogAnalyzer` library:
-  ```bash
-  mkdir -p workloads/log-analyzer/src/log_analyzer/core
-  touch workloads/log-analyzer/src/log_analyzer/core/analyzer.py
-  touch workloads/log-analyzer/src/log_analyzer/core/metrics.py
-  touch workloads/log-analyzer/src/log_analyzer/core/prompts.py
-  ```
-- [ ] Extract core logic from `main.py` into `analyzer.py`
-- [ ] Write `evals/scripts/run_experiment.py`:
-  - Load experiment config from YAML
-  - Initialize LogAnalyzer with config
-  - Run analysis on each golden sample
-  - Compute accuracy, latency, F1 metrics
-  - Save results to `experiments/runs/<timestamp>-<exp-id>/`
-- [ ] Create experiment config schema:
-  ```yaml
-  # evals/experiments/configs/llama3.2-3b-baseline.yaml
-  ```
-- [ ] Create 3 baseline configs:
-  - `llama3.2-3b-baseline.yaml` (temp: 0.3)
-  - `llama3.2-3b-temp0.1.yaml` (high precision)
-  - `llama3.2-3b-temp0.5.yaml` (creative)
-- [ ] Add justfile recipes:
-  ```bash
-  # Add to justfile
-  experiment config_name:
-      uv run python evals/scripts/run_experiment.py evals/experiments/configs/{{config_name}}.yaml
+See `dspy.md` Part 5 for complete search space implementation.
 
-  compare run_id_1 run_id_2:
-      uv run python evals/scripts/compare_experiments.py {{run_id_1}} {{run_id_2}}
-  ```
-- [ ] Write unit tests for shared LogAnalyzer
+### Justfile Integration
 
-**Deliverable**: Can run reproducible experiments from command line
+```makefile
+# justfile (add)
 
-**Success Criteria**:
-- `just experiment llama3.2-3b-baseline` runs full evaluation
-- Results saved with frozen config and git commit
-- Metrics computed: root_cause accuracy, severity accuracy, latency, tokens
-- Results are reproducible (same config → same results)
-- Experiments complete in <10 minutes for 150 samples
+# Run prompt optimization on M2 MacBook
+optimize-prompts:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🚀 Starting prompt optimization..."
+    echo ""
+    echo "Prerequisites:"
+    echo "  ✓ llama.cpp server running on localhost:8080"
+    echo "  ✓ Validation dataset: evals/golden-v1-validation.json"
+    echo ""
+    read -p "Press Enter to continue (Ctrl+C to cancel)..."
+    cd workloads/log-analyzer
+    uv run python evaluation/optimize.py
+
+# Complete workflow
+optimize-and-validate:
+    just optimize-prompts
+    just experiment optimized-v2
+    just compare baseline-v1 optimized-v2
+```
+
+### Success Criteria
+
+- [ ] Optimizer generates candidates from search space
+- [ ] Evaluates 10 candidates in ~5 minutes (M2, 4x parallelization)
+- [ ] Exports winner as YAML
+- [ ] Can iterate weekly without cluster impact
+
+**Time estimate:** 2-3 days
 
 ---
 
-### Phase 3: Visualization & Metrics (Week 5)
+## Phase 5: Grafana Visualization
 
-**Goal**: Track experiment results over time in Grafana
+### Goal
 
-**Tasks**:
-- [ ] Install Grafana Infinity plugin:
-  ```bash
-  kubectl exec -it -n logging deployment/grafana -- \
-    grafana-cli plugins install yesoreyeram-infinity-datasource
-  kubectl rollout restart -n logging deployment/grafana
-  ```
-- [ ] Create `evals/scripts/update_leaderboard.py`:
-  - Scan `experiments/runs/` directory
-  - Aggregate metrics from all runs
-  - Write to `experiments/leaderboard.json`
-- [ ] Add leaderboard justfile recipe:
-  ```bash
-  leaderboard:
-      uv run python evals/scripts/update_leaderboard.py
-  ```
-- [ ] Create Grafana dashboards:
-  - **Experiment Leaderboard** (table view)
-  - **Accuracy Over Time** (time series)
-  - **Accuracy by Category** (bar chart)
-  - **Latency Distribution** (histogram)
-- [ ] Optional: Serve leaderboard via API endpoint
-  ```python
-  @app.get("/api/evals/leaderboard")
-  async def get_leaderboard(): ...
-  ```
+Single dashboard showing all experiments and optimization runs with trend analysis.
 
-**Deliverable**: Grafana dashboards showing experiment trends
+### Dashboard Layout
 
-**Success Criteria**:
-- Can view leaderboard of all experiments in Grafana
-- Can see accuracy trends over time (detect regressions)
-- Can drill down to per-category performance
-- Can identify best-performing config at a glance
+**Panel 1: Experiment Leaderboard (Table)**
+- All experiments ranked by overall score
+- Shows: experiment_id, prompt, score, latency, date
 
----
+**Panel 2: Score Over Time (Time Series)**
+- Track prompt performance across versions
+- Compare multiple experiments
 
-### Phase 4: Multi-Model Support (Week 6-7)
+**Panel 3: Category Accuracy (Heatmap)**
+- Per-category breakdown
+- Identify weak spots
 
-**Goal**: A/B test different models and quantizations
+### Data Flow
 
-**Tasks**:
-- [ ] Download additional models to Node 2:
-  ```bash
-  ssh node2
-  cd /mnt/k8s-storage/models
+```
+Experiments → leaderboard.json → Grafana JSON API → Dashboard
+```
 
-  # 1B model (faster, less accurate?)
-  wget https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf
+### Justfile Integration
 
-  # 3B Q8 quantization (slower, more accurate?)
-  wget https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q8_0.gguf
-  ```
-- [ ] Create additional llama-cpp deployments:
-  - Copy `workloads/llm/llama-deployment.yaml` → `llama-deployment-1b.yaml`
-  - Update model path, resource limits
-  - Create corresponding service: `llama-service-1b.yaml`
-  - Repeat for Q8 variant
-- [ ] Deploy new models:
-  ```bash
-  kubectl apply -f workloads/llm/llama-deployment-1b.yaml
-  kubectl apply -f workloads/llm/llama-deployment-3b-q8.yaml
-  ```
-- [ ] Create experiment configs for each model:
-  - `llama3.2-1b-q4-baseline.yaml`
-  - `llama3.2-3b-q8-baseline.yaml`
-- [ ] Run experiments on all models:
-  ```bash
-  just experiment llama3.2-3b-q4-baseline
-  just experiment llama3.2-1b-q4-baseline
-  just experiment llama3.2-3b-q8-baseline
-  ```
-- [ ] Update leaderboard and compare in Grafana
+```makefile
+# Update Grafana dashboards
+leaderboard:
+    uv run python evals/scripts/update_leaderboard.py
+```
 
-**Deliverable**: Data-driven model selection (accuracy vs. speed trade-off)
+### Success Criteria
 
-**Success Criteria**:
-- Can run same experiment on 3+ different models
-- Clear winner for accuracy (even if slower)
-- Clear winner for speed (even if less accurate)
-- Documented trade-offs with specific numbers:
-  - Model A: 92% accuracy, 2.1s latency
-  - Model B: 85% accuracy, 1.0s latency
-  - Model C: 78% accuracy, 0.6s latency
-- Production decision: Choose Model A (accuracy) or Model B (balanced)
+- [ ] Leaderboard JSON generated and served
+- [ ] Grafana dashboard shows all experiments
+- [ ] Can compare prompts visually
+- [ ] Trend analysis over time
+
+**Time estimate:** 1-2 days
 
 ---
 
-### Phase 5: Prompt Engineering (Week 8+)
+## Complete Workflows
 
-**Goal**: Iterate on prompts using experiment framework
-
-**Tasks**:
-- [ ] Create prompt template library:
-  ```bash
-  mkdir -p workloads/log-analyzer/src/log_analyzer/prompts
-  touch workloads/log-analyzer/src/log_analyzer/prompts/root_cause_v1.txt
-  touch workloads/log-analyzer/src/log_analyzer/prompts/root_cause_v2.txt
-  touch workloads/log-analyzer/src/log_analyzer/prompts/structured_output_v1.txt
-  touch workloads/log-analyzer/src/log_analyzer/prompts/chain_of_thought_v1.txt
-  ```
-- [ ] Write baseline prompts (v1)
-- [ ] Run baseline experiment
-- [ ] Analyze failure modes:
-  ```bash
-  # Find samples where LLM failed
-  cat experiments/runs/latest/results.jsonl | \
-    jq 'select(.is_correct == false) | {sample_id, predicted, actual, category}'
-  ```
-- [ ] Create targeted prompt improvements (v2):
-  - Add few-shot examples for problematic categories
-  - Clarify output format
-  - Add chain-of-thought for complex errors
-- [ ] A/B test prompt variations:
-  ```bash
-  just experiment prompt-v1-baseline
-  just experiment prompt-v2-fewshot
-  just experiment prompt-v2-cot
-  ```
-- [ ] Track prompt performance over time in Grafana
-- [ ] Document best prompts for each failure category
-
-**Deliverable**: Best-performing prompts for each task type
-
-**Success Criteria**:
-- 5+ prompt variants tested
-- Clear winner for root cause extraction
-- Documented when to use which prompt (e.g., few-shot for network errors, CoT for cascade failures)
-- Baseline → optimized accuracy improvement of 10%+ (e.g., 75% → 85%)
-- Production uses best-performing prompt
-
-**Optional: DSPy Integration**
-- [ ] If accuracy plateaus <85%, experiment with DSPy
-- [ ] Install DSPy: `uv add dspy-ai`
-- [ ] Convert golden dataset to DSPy format
-- [ ] Define LogAnalysis signature
-- [ ] Run BootstrapFewShot optimizer
-- [ ] Compare DSPy-optimized vs. manually-crafted prompts
-
----
-
-### Phase 6: Automation (Future)
-
-**Goal**: Continuous quality monitoring
-
-**Tasks**:
-- [ ] Create K8s CronJob for nightly experiments
-- [ ] Set up alerting when accuracy drops below threshold
-- [ ] Automate leaderboard updates
-- [ ] Build evaluation into CI/CD pipeline
-- [ ] Create regression test suite
-
-**Deliverable**: Hands-off quality monitoring
-
----
-
-## Best Practices
-
-### Experiment Hygiene
-
-**1. Always version everything**
-- Dataset: `golden-v1`, `golden-v2`
-- Prompts: `root_cause_v1`, `root_cause_v2`
-- Configs: Include git commit in results
-
-**2. Run experiments in isolation**
-- One experiment at a time
-- Clean state between runs
-- No concurrent modifications to shared state
-
-**3. Document intent**
-- Add `description` field to experiment configs
-- Explain why you're running the experiment
-- Note expected outcome vs. actual
-
-**4. Fail fast**
-- Validate config before running full experiment
-- Start with 10-sample subset for new configs
-- Check for obvious errors before 150-sample run
-
-### Debugging Failed Experiments
+### Workflow 1: Establish Baseline
 
 ```bash
-# Check experiment logs
-cat experiments/runs/<run-id>/summary.md
+# One-time M2 setup (30 min)
+cd ~/workspace/llama.cpp
+LLAMA_METAL=1 make -j
+./llama-server -m models/Llama-3.2-3B-Instruct-Q4_K_M.gguf -ngl 99 -np 4 --port 8080
 
-# View per-sample failures
-jq 'select(.is_correct == false)' experiments/runs/<run-id>/results.jsonl
+# Measure current performance (1 min)
+cd ~/workspace/k8s-slm-log-agent
+just experiment baseline-v1
 
-# Find common failure patterns
-jq -r 'select(.is_correct == false) | .category' \
-  experiments/runs/<run-id>/results.jsonl | sort | uniq -c | sort -rn
+# View results
+cat evals/experiments/runs/latest/summary.md
+
+# Update Grafana
+just leaderboard
 ```
 
-### Dataset Maintenance
-
-**When to create golden-v2:**
-- Found systematic labeling errors in v1
-- Want to add new failure categories
-- Dataset doesn't represent current production logs
-- Expanding from 150 to 300 samples
-
-**How to version:**
-```bash
-# Create new version
-cp -r evals/datasets/golden-v1 evals/datasets/golden-v2
-
-# Document changes
-cat > evals/datasets/golden-v2/CHANGELOG.md <<EOF
-# Changes from golden-v1
-
-- Added 50 new samples for DNS failures
-- Fixed labeling errors in samples 023, 045, 078
-- Updated severity for network timeouts (warn → error)
-EOF
-
-# Update metadata
-# Edit golden-v2/metadata.json
-```
+**Time: 1 minute** (after setup)
 
 ---
 
-## Troubleshooting
+### Workflow 2: Optimize Prompts
 
-### Experiment script hangs
-
-**Symptom**: `run_experiment.py` hangs on first sample
-
-**Causes**:
-- Port-forward died (check `just dev`)
-- LLM server not responding (check `curl http://localhost:8080/health`)
-- Prompt too long, exceeds context window
-
-**Solution**:
 ```bash
-# Check port-forwards
-lsof -i :8080  # Should show kubectl port-forward
+# Run optimization (5 min)
+just optimize-prompts
 
-# Restart if needed
-just stop
-just dev
+# Validate winner (1 min)
+just experiment optimized-v2
 
-# Check LLM health
-curl http://localhost:8080/health
-curl http://localhost:8080/v1/models
+# Compare
+just compare baseline-v1 optimized-v2
+
+# Deploy if improved
+git add workloads/log-analyzer/prompt_templates/k8s_log_analysis_v2.yaml
+git commit -m "feat: optimize prompt v2 (+5.8% accuracy)"
+git push origin main
 ```
 
-### Metrics don't match manual testing
-
-**Symptom**: Experiment shows 80% accuracy, but manual testing seems better
-
-**Causes**:
-- Different prompt than production
-- Different temperature/sampling
-- Different log preprocessing
-
-**Solution**:
-```bash
-# Run experiment with production config
-just experiment production-mirror
-
-# Compare configs
-diff \
-  workloads/log-analyzer/k8s/01-configmap.yaml \
-  evals/experiments/configs/production-mirror.yaml
-```
-
-### Grafana dashboard shows no data
-
-**Symptom**: Infinity datasource configured, but panels show "No data"
-
-**Causes**:
-- JSON file path incorrect
-- JSON format not compatible
-- Datasource permissions
-
-**Solution**:
-```bash
-# Test leaderboard file directly
-cat evals/experiments/leaderboard.json | jq .
-
-# Serve via HTTP for easier debugging
-cd evals/experiments
-python3 -m http.server 8001
-
-# Configure Infinity datasource:
-# URL: http://localhost:8001/leaderboard.json
-```
+**Time: ~7 minutes**
 
 ---
 
-## References
+## Time Estimates
 
-### Related Documentation
+### Hardware Performance
 
-- **Production API**: `workloads/log-analyzer/README.md` - Deployment and API docs
-- **Golden Dataset**: `evals/README.md` - Dataset generation workflow
-- **Infrastructure**: `infrastructure/gateway/README.md` - Envoy Gateway setup
-- **Project Goals**: `agents.md` - High-level project architecture
+| Hardware | Inference Speed | Concurrency | Throughput |
+|----------|----------------|-------------|------------|
+| **Cluster (CPU-only)** | 22s per request | 1 | 2.7 samples/min |
+| **M2 Sequential** | 2s per request | 1 | 30 samples/min |
+| **M2 Parallel (4x)** | 2s per request | 4 | 115 samples/min ⚡ |
 
-### External Resources
+### Operation Times
 
-- [DSPy Documentation](https://dspy-docs.vercel.app/) - Prompt optimization framework
-- [MLflow Documentation](https://mlflow.org/docs/latest/index.html) - Experiment tracking
-- [Grafana Infinity Plugin](https://grafana.com/grafana/plugins/yesoreyeram-infinity-datasource/) - JSON datasource
-- [ROUGE Score](https://pypi.org/project/rouge-score/) - Summary quality metrics
+| Operation | Dataset Size | Time (M2, 4x) | Notes |
+|-----------|--------------|---------------|-------|
+| **Single Experiment** | 115 samples | **~1 minute** | Full evaluation |
+| **Validation Run** | 55 samples | **~30 seconds** | Optimization subset |
+| **Prompt Optimization** | 550 calls | **~5 minutes** | 10 candidates |
+| **Compare Experiments** | N/A | **<5 seconds** | Post-processing |
+| **Update Dashboards** | N/A | **<5 seconds** | JSON generation |
+
+### Cost Analysis (vs Cluster)
+
+| Approach | Full Experiment | Optimization |
+|----------|----------------|--------------|
+| **Cluster Only** | 42 min ❌ | 3.4 hours ❌ |
+| **M2 Sequential** | 4 min | 20 min |
+| **M2 Parallel (4x)** | **1 min** ✅ | **5 min** ✅ |
+
+**Key Insight:** M2 parallel execution is **42x faster** than cluster.
+
+---
+
+## Implementation Roadmap
+
+### Phase 1: Golden Dataset ✅ COMPLETE
+
+**Status:** COMPLETE
+**Deliverable:** 115 labeled samples ready
+
+---
+
+### Phase 2: Shared Analyzer Module (1-2 days)
+
+**Goal:** Extract core logic into reusable module
+
+**Tasks:**
+- [ ] Create `core/analyzer.py` with `LogAnalyzer` class
+- [ ] Create `evaluation/metrics.py` with unified metrics
+- [ ] Refactor `main.py` to use shared analyzer
+- [ ] Write unit tests
+- [ ] Verify production API unchanged
+
+---
+
+### Phase 3: Evaluation Harness (2-3 days)
+
+**Goal:** Run reproducible experiments
+
+**Tasks:**
+- [ ] Implement `run_experiment.py`
+- [ ] Add experiment configs
+- [ ] Add justfile recipes
+- [ ] Test on M2 MacBook (~1 min runtime)
+- [ ] Generate summary reports
+
+---
+
+### Phase 4: Prompt Optimization (2-3 days)
+
+**Goal:** Systematic prompt search
+
+**Tasks:**
+- [ ] Define search space (108 combinations)
+- [ ] Implement candidate generator
+- [ ] Implement `optimize.py`
+- [ ] Split dataset (60/55)
+- [ ] Test optimization (~5 min runtime)
+- [ ] Export winner as YAML
+
+---
+
+### Phase 5: Grafana Visualization (1-2 days)
+
+**Goal:** Track quality over time
+
+**Tasks:**
+- [ ] Implement `update_leaderboard.py`
+- [ ] Generate JSON for Grafana
+- [ ] Create Grafana dashboard
+- [ ] Add API endpoints
+- [ ] Test full workflow
+
+---
+
+### Total Timeline
+
+**Sequential:** 7-11 days
+**MVP (Phases 2-3 only):** 3-5 days
 
 ---
 
 ## Quick Start
 
 ```bash
-# 1. Create golden dataset from your cluster
-cd evals
+# 1. One-time M2 setup (30 min)
+cd ~/workspace
+git clone https://github.com/ggerganov/llama.cpp
+cd llama.cpp
+LLAMA_METAL=1 make -j
+mkdir models && cd models
+wget https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf
 
-# Start Loki port-forward
-kubectl port-forward -n logging svc/loki 3100:3100 &
+# 2. Start local LLM server
+cd ~/workspace/llama.cpp
+./llama-server -m models/Llama-3.2-3B-Instruct-Q4_K_M.gguf -ngl 99 -np 4 --port 8080
 
-# Extract real logs from all namespaces
-uv run python extract_golden_dataset.py
+# 3. Establish baseline (1 min)
+cd ~/workspace/k8s-slm-log-agent
+just experiment baseline-v1
 
-# Generate synthetic logs for gaps
-uv run python synthesize_logs.py
+# 4. Optimize prompts (5 min)
+just optimize-prompts
 
-# Combine into final dataset
-uv run python combine_datasets.py
+# 5. Validate winner (1 min)
+just experiment optimized-v2
 
-# Manually label real logs
-# Edit golden_dataset_unlabeled.json → golden_dataset_labeled.json
+# 6. Compare
+just compare baseline-v1 optimized-v2
 
-# 2. Set up dataset directory
-mkdir -p datasets/golden-v1
-cp golden_dataset_labeled.json datasets/golden-v1/samples.json
+# 7. Update Grafana
+just leaderboard
 
-# 3. Start K8s port-forwards
-just dev
-
-# 4. Run baseline experiment
-just experiment llama3.2-3b-baseline
-
-# 5. View results
-cat experiments/runs/*/summary.md
-
-# 6. Update leaderboard
-uv run python evals/scripts/update_leaderboard.py
-
-# 7. View in Grafana
-open http://localhost:3000/dashboards
+# 8. Deploy
+git commit -m "feat: optimize prompt (+X% accuracy)"
+git push origin main
 ```
+
+**Total time: ~7 minutes** (after one-time setup)
