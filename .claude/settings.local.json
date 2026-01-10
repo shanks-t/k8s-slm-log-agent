@@ -128,7 +128,8 @@
       "Bash(brew install:*)",
       "Bash(nvim:*)",
       "Bash(code --list-extensions:*)",
-      "Bash(.venv/bin/python:*)"
+      "Bash(.venv/bin/python:*)",
+      "WebFetch(domain:dspy.ai)"
     ],
     "deny": [],
     "ask": []
